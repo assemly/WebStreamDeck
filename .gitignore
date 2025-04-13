@@ -1,0 +1,85 @@
+# Build directory
+build/
+
+# CMake cache and related files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+
+# Executables and libraries
+*.exe
+*.dll
+*.so
+*.dylib
+*.lib
+*.a
+
+# Visual Studio Code
+.vscode/
+
+# Visual Studio
+.vs/
+*.sln
+*.vcxproj*
+*.user
+*.suo
+Debug/
+Release/
+x64/
+Win32/
+*.VC.db
+*.pdb
+
+# Other
+*.log
+*.swp
+
+# 编译器和IDE生成的文件
+/.vs/
+/.vscode/ipch/
+/.cache/
+/CMakeSettings.json
+/CMakeUserPresets.json
+
+# Qt相关
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*
+*.moc
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+Makefile*
+*build-*
+*.qm
+
+# 可执行文件和库文件
+*.dll
+*.exe
+*.so
+*.a
+*.lib
+*.exp
+*.obj
+*.o
+*.ilk
+*.pdb
+*.idb
+*.tlog
+
+# 操作系统临时文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 其他
+*.log
+*.tmp
+
+# vcpkg manifest mode artifact directory
+vcpkg_installed/
+
+# Cursor IDE directory
+.cursor/ 
