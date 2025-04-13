@@ -1,7 +1,9 @@
 #include "UIManager.hpp"
 #include <stdio.h> // For printf used in button click
 
-UIManager::UIManager()
+UIManager::UIManager(ConfigManager& configManager, ActionExecutor& actionExecutor)
+    : m_configManager(configManager),
+      m_actionExecutor(actionExecutor)
 {
     // Constructor: Initialize any UI state if needed
 }
@@ -30,31 +32,40 @@ void UIManager::drawButtonGridWindow()
 {
     ImGui::Begin("Button Grid");
 
-    const float button_size = 100.0f;
-    const int buttons_per_row = 4;
-    int button_count = 0;
+    const std::vector<ButtonConfig>& buttons = m_configManager.getButtons();
 
-    for (int i = 0; i < 12; ++i) // Example: Create 12 buttons
-    {
-        ImGui::PushID(i);
-        char label[32];
-        sprintf(label, "Button %d", i + 1);
+    if (buttons.empty()) {
+        ImGui::TextUnformatted("No buttons configured. Add buttons in config.json or via Configuration panel.");
+    } else {
+        const float button_size = 100.0f;
+        const int buttons_per_row = 4; // You might want to make this dynamic based on window width later
+        int button_count = 0;
 
-        if (ImGui::Button(label, ImVec2(button_size, button_size)))
+        for (const auto& button : buttons)
         {
-            printf("Button %d clicked!\n", i + 1);
-        }
+            ImGui::PushID(button.id.c_str()); // Use button ID for unique ImGui ID
+            
+            // Use button name as label, handle potential encoding issues if necessary
+            if (ImGui::Button(button.name.c_str(), ImVec2(button_size, button_size)))
+            {
+                printf("Button '%s' (ID: %s) clicked! Action: %s(%s)\n", 
+                       button.name.c_str(), button.id.c_str(), 
+                       button.action_type.c_str(), button.action_param.c_str());
+                // Trigger the actual action execution here
+                m_actionExecutor.executeAction(button.id);
+            }
 
-        button_count++;
-        if (button_count % buttons_per_row != 0)
-        {
-            ImGui::SameLine();
+            button_count++;
+            if (button_count % buttons_per_row != 0)
+            {
+                ImGui::SameLine();
+            }
+            else
+            {
+                button_count = 0; // Reset for next row (or handle wrapping better)
+            }
+            ImGui::PopID();
         }
-        else
-        {
-            button_count = 0;
-        }
-        ImGui::PopID();
     }
 
     ImGui::End();

@@ -5,6 +5,8 @@
 #include <GLFW/glfw3.h>
 
 #include "UIManager.hpp" // Include the new UI Manager header
+#include "ConfigManager.hpp" // Include ConfigManager header
+#include "ActionExecutor.hpp" // Include ActionExecutor header
 
 static void glfw_error_callback(int error, const char* description)
 {
@@ -49,8 +51,14 @@ int main(int, char**)
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
-    // Create the UI Manager instance
-    UIManager uiManager;
+    // Create the Config Manager instance FIRST
+    ConfigManager configManager; // Loads config in constructor
+
+    // Create the Action Executor instance, passing the config manager
+    ActionExecutor actionExecutor(configManager);
+
+    // Create the UI Manager instance, passing both managers
+    UIManager uiManager(configManager, actionExecutor);
 
     ImVec4 clear_color = ImVec4(0.1f, 0.1f, 0.1f, 1.00f);
 
