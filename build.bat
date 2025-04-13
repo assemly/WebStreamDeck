@@ -44,6 +44,11 @@ if errorlevel 1 (
 )
 
 echo Build completed successfully!
+
+rem Run the built executable
+echo Starting the application...
+start "" "%BUILD_CONFIG%\WebStreamDeck.exe"
+
 cd ..
 goto :eof
 
