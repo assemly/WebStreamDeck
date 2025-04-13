@@ -31,18 +31,22 @@ target_link_libraries(imgui PUBLIC glfw)
 
 find_package(OpenGL REQUIRED)
 find_package(Threads REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED) # Find nlohmann_json via vcpkg
 
 # Add the executable
 add_executable(${PROJECT_NAME}
     src/main.cpp
     src/UIManager.cpp
+    src/ConfigManager.cpp
+    src/ActionExecutor.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
-    imgui       # Links our imgui library (which now pulls in glfw3 publicly)
+    imgui       # Links our imgui library (which now pulls in glfw publicly)
     # glfw      # No longer needed here explicitly
     OpenGL::GL
     Threads::Threads
+    nlohmann_json::nlohmann_json # Link nlohmann_json target
 )
 
 

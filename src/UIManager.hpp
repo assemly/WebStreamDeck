@@ -1,16 +1,20 @@
 #pragma once
 
 #include <imgui.h>
+#include "ConfigManager.hpp"
+#include "ActionExecutor.hpp"
 
 class UIManager
 {
 public:
-    UIManager();
+    explicit UIManager(ConfigManager& configManager, ActionExecutor& actionExecutor);
     ~UIManager();
 
     void drawUI();
 
 private:
+    ConfigManager& m_configManager;
+    ActionExecutor& m_actionExecutor;
     // Private helper methods for drawing specific windows
     void drawButtonGridWindow();
     void drawConfigurationWindow();
