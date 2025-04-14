@@ -10,8 +10,8 @@
 #include "ConfigManager.hpp" // Make sure ConfigManager is included
 
 // Define the root directory for web files relative to the executable
-// Adjust this path as needed
 const std::filesystem::path WEB_ROOT = "web";
+const std::filesystem::path ASSETS_ICONS_ROOT = "assets/icons";
 
 // Helper function to determine MIME type from file extension
 std::string getMimeType(const std::filesystem::path& path) {
@@ -38,21 +38,33 @@ std::string getMimeType(const std::filesystem::path& path) {
 
 // Helper function to read file content
 std::optional<std::string> readFile(const std::filesystem::path& path) {
-    // Security check: Ensure the path is within the web root
+    // Security check: Ensure the path is within allowed roots
+    // Use weakly_canonical to resolve symlinks etc. before checking
     auto canonicalPath = std::filesystem::weakly_canonical(path);
     auto webRootCanonical = std::filesystem::weakly_canonical(WEB_ROOT);
-    if (canonicalPath.string().find(webRootCanonical.string()) != 0) {
-         std::cerr << "Attempt to access file outside web root: " << path << std::endl;
+    auto iconsRootCanonical = std::filesystem::weakly_canonical(ASSETS_ICONS_ROOT);
+
+    // Check if the canonical path starts with either allowed root's canonical path
+    bool isInWebRoot = (canonicalPath.string().find(webRootCanonical.string()) == 0);
+    bool isInIconsRoot = (canonicalPath.string().find(iconsRootCanonical.string()) == 0);
+
+    if (!isInWebRoot && !isInIconsRoot) {
+         std::cerr << "Attempt to access file outside allowed roots: " << path << " (Canonical: " << canonicalPath << ")" << std::endl;
          return std::nullopt;
      }
 
+    // Check if file exists and is a regular file after security check
     if (!std::filesystem::exists(canonicalPath) || !std::filesystem::is_regular_file(canonicalPath)) {
+         std::cerr << "File does not exist or is not a regular file: " << canonicalPath << std::endl;
         return std::nullopt;
     }
+    
     std::ifstream file(canonicalPath, std::ios::binary);
     if (!file.is_open()) {
+         std::cerr << "Could not open file: " << canonicalPath << std::endl;
         return std::nullopt;
     }
+    
     std::stringstream buffer;
     buffer << file.rdbuf();
     return buffer.str();
@@ -89,14 +101,60 @@ void CommServer::configure_app(int port) {
                 const auto& buttons = m_configManager.getButtons();
                 json layout = json::array();
                 for (const auto& btn : buttons) {
-                    layout.push_back({{"id", btn.id}, {"name", btn.name}}); // Only send id and name for now
+                    std::string webIconPath = ""; // Default to empty string
+                    if (!btn.icon_path.empty()) {
+                        // --- Convert file path to URL path ---
+                        std::filesystem::path fsPath(btn.icon_path);
+                        std::string pathStr = btn.icon_path; // Use a copy for manipulation
+
+                        // Normalize separators first
+                        std::replace(pathStr.begin(), pathStr.end(), '\\', '/');
+
+                        // Define the expected relative prefix
+                        std::string expectedPrefix = ASSETS_ICONS_ROOT.string();
+                        std::replace(expectedPrefix.begin(), expectedPrefix.end(), '\\', '/');
+
+                        // Check if the path starts with the expected relative prefix
+                        if (pathStr.rfind(expectedPrefix, 0) == 0) {
+                             // If it starts with "assets/icons", use it directly
+                             webIconPath = "/" + pathStr;
+                        } else {
+                             // Check if it looks like just a filename (no slashes)
+                             if (pathStr.find('/') == std::string::npos) {
+                                  std::cout << "[INFO] Button icon path '" << btn.icon_path 
+                                            << "' looks like a filename. Assuming it's in assets/icons/." << std::endl;
+                                  webIconPath = "/" + expectedPrefix + "/" + pathStr; 
+                             } else {
+                                 // If it's an absolute path or unexpected relative path, log a warning.
+                                 // Ideally, configuration should store correct relative paths.
+                                 std::cerr << "[WARN] Button icon path '" << btn.icon_path 
+                                           << "' is not a standard relative path starting with '" << expectedPrefix 
+                                           << "'. Icon might not load correctly in web UI." << std::endl;
+                                 // As a basic fallback, try using the original path, hoping it might work
+                                 // or at least trigger a 404 if server is configured for it.
+                                 // A truly robust solution needs consistent relative paths in config.
+                                 webIconPath = "/" + pathStr; // Best guess fallback
+                             }
+                        }
+                        // Ensure no double slashes at the beginning (e.g., if pathStr started with /)
+                        if (webIconPath.length() > 1 && webIconPath[0] == '/' && webIconPath[1] == '/') {
+                            webIconPath = webIconPath.substr(1);
+                        }
+                        // -----------------------------------------
+                    }
+
+                    layout.push_back({
+                        {"id", btn.id},
+                        {"name", btn.name},
+                        {"icon_path", webIconPath} // Send the calculated web path
+                    });
                 }
                 json configMsg = {
                     {"type", "initial_config"},
                     {"payload", {{"layout", layout}}}
                 };
                 ws->send(configMsg.dump(), uWS::OpCode::TEXT);
-                std::cout << "[WS] Sent initial config to client." << std::endl;
+                std::cout << "[WS] Sent initial config to client (with processed icon paths)." << std::endl; // Added log
             } catch (const std::exception& e) {
                 std::cerr << "[WS] Error sending initial config: " << e.what() << std::endl;
             }
@@ -152,14 +210,32 @@ void CommServer::configure_app(int port) {
     // --- HTTP Configuration --- 
     m_app->get("/*", [this](uWS::HttpResponse<false> *res, uWS::HttpRequest *req) {
         std::string_view url = req->getUrl();
-        std::filesystem::path requestedPath = WEB_ROOT;
+        std::filesystem::path basePath;
+        std::string_view relativeUrl;
 
-        if (url == "/") {
-            requestedPath /= "index.html"; // Default to index.html for root
+        constexpr std::string_view iconsPrefix = "/assets/icons/";
+        if (url.rfind(iconsPrefix, 0) == 0) {
+            basePath = ASSETS_ICONS_ROOT;
+            relativeUrl = url.substr(iconsPrefix.length());
         } else {
-            // Simple path mapping - remove leading slash if present
-            requestedPath /= (url[0] == '/' ? url.substr(1) : url);
+            basePath = WEB_ROOT;
+            relativeUrl = (url == "/" || url.empty()) ? "index.html" : (url[0] == '/' ? url.substr(1) : url);
+            if (relativeUrl.empty() || relativeUrl == "/") {
+                 relativeUrl = "index.html";
+            }
         }
+
+        std::string relativeUrlStr = std::string(relativeUrl);
+        if (relativeUrlStr.find("..") != std::string::npos || 
+            (relativeUrlStr.length() > 0 && relativeUrlStr[0] == '.')) 
+        {
+             std::cerr << "[HTTP] Invalid path requested: " << url << std::endl;
+             res->writeStatus("400 Bad Request");
+             res->end("Invalid path");
+             return;
+        }
+
+        std::filesystem::path requestedPath = basePath / relativeUrlStr;
 
         std::cout << "[HTTP] Request for URL: " << url << " mapped to: " << requestedPath << std::endl;
 
@@ -169,7 +245,6 @@ void CommServer::configure_app(int port) {
             res->writeHeader("Content-Type", getMimeType(requestedPath));
             res->end(*fileContent);
         } else {
-            std::cerr << "[HTTP] File not found or access denied: " << requestedPath << std::endl;
             res->writeStatus("404 Not Found");
             res->end("File not found");
         }

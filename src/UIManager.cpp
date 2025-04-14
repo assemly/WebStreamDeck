@@ -7,6 +7,11 @@
 #include <iphlpapi.h> // For GetAdaptersAddresses
 #include <iostream>   // For std::cerr
 #include <qrcodegen.hpp> // Re-add QR Code generation library
+#include <ImGuiFileDialog.h> // ADDED ImGuiFileDialog header
+
+// Define STB_IMAGE_IMPLEMENTATION in *one* CPP file before including stb_image.h
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>       // Include stb_image header for image loading
 
 #pragma comment(lib, "Ws2_32.lib") // Link against Ws2_32.lib
 #pragma comment(lib, "iphlpapi.lib") // Link against Iphlpapi.lib
@@ -42,6 +47,35 @@ GLuint qrCodeToTextureHelper(const qrcodegen::QrCode& qr) {
     return textureID;
 }
 
+// --- ADDED: Implementation for loading texture from file ---
+GLuint UIManager::LoadTextureFromFile(const char* filename) {
+    int width, height, channels;
+    // Force 4 channels (RGBA) for consistency with OpenGL formats
+    unsigned char* data = stbi_load(filename, &width, &height, &channels, 4);
+    if (data == nullptr) {
+        std::cerr << "Error loading image: " << filename << " - " << stbi_failure_reason() << std::endl;
+        return 0; // Return 0 indicates failure
+    }
+
+    GLuint textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+#if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+#endif
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    stbi_image_free(data);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    std::cout << "Loaded texture: " << filename << " (ID: " << textureID << ")" << std::endl;
+    return textureID;
+}
+
+// --- End of LoadTextureFromFile --- 
+
 UIManager::UIManager(ConfigManager& configManager, ActionExecutor& actionExecutor, TranslationManager& translationManager)
     : m_configManager(configManager),
       m_actionExecutor(actionExecutor),
@@ -50,9 +84,19 @@ UIManager::UIManager(ConfigManager& configManager, ActionExecutor& actionExecuto
     updateLocalIP(); // Get IP on startup
 }
 
+// --- MODIFIED: Destructor to include texture cleanup ---
 UIManager::~UIManager()
 {
-    releaseQrTexture(); // Release texture in destructor
+    releaseQrTexture(); // Release QR code texture (already present)
+
+    // Release button icon textures
+    for (auto const& [path, textureId] : m_buttonIconTextures) {
+        if (textureId != 0) { // Only delete valid texture IDs
+            glDeleteTextures(1, &textureId);
+             std::cout << "Deleted texture for: " << path << " (ID: " << textureId << ")" << std::endl;
+        }
+    }
+    m_buttonIconTextures.clear(); // Clear the map
 }
 
 void UIManager::drawUI()
@@ -79,14 +123,64 @@ void UIManager::drawButtonGridWindow()
     } else {
         const float button_size = 100.0f;
         const int buttons_per_row = 4; // You might want to make this dynamic based on window width later
-        int button_count = 0;
+        int button_index_in_row = 0; // Track position in the current row
 
         for (const auto& button : buttons)
         {
             ImGui::PushID(button.id.c_str()); // Use button ID for unique ImGui ID
             
-            // Use button name as label, handle potential encoding issues if necessary
-            if (ImGui::Button(button.name.c_str(), ImVec2(button_size, button_size)))
+            // --- ADDED: Icon Loading and Button Type Selection --- 
+            GLuint textureID = 0; // Texture ID for this button's icon (if any)
+            bool useImageButton = false;
+
+            // Check if an icon path is provided
+            if (!button.icon_path.empty()) {
+                // Check if texture is already loaded and cached
+                auto it = m_buttonIconTextures.find(button.icon_path);
+                if (it != m_buttonIconTextures.end()) {
+                    // Texture already loaded
+                    textureID = it->second;
+                    if (textureID != 0) { // Make sure cached ID is valid
+                        useImageButton = true;
+                    }
+                } else {
+                    // Texture not loaded yet, try to load it now
+                    textureID = LoadTextureFromFile(button.icon_path.c_str());
+                    // Cache the result (even if loading failed, store 0)
+                    m_buttonIconTextures[button.icon_path] = textureID;
+                    if (textureID != 0) {
+                        useImageButton = true;
+                    } else {
+                        // Log error only once per failed load attempt
+                        std::cerr << "Failed to load texture for button '" << button.id << "' from path: " << button.icon_path << std::endl;
+                    }
+                }
+            }
+
+            // Determine button click action
+            bool buttonClicked = false;
+            if (useImageButton) {
+                 // Use ImageButton if texture is valid
+                 buttonClicked = ImGui::ImageButton(button.id.c_str(),
+                                                    (ImTextureID)(intptr_t)textureID,
+                                                    ImVec2(button_size, button_size),
+                                                    ImVec2(0, 0),
+                                                    ImVec2(1, 1),
+                                                    ImVec4(0,0,0,0),
+                                                    ImVec4(1,1,1,1));
+                 // Optional: Display button name as tooltip for image buttons
+                 if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("%s", button.name.c_str());
+                 }
+            } else {
+                // Fallback to text button if no icon or loading failed
+                buttonClicked = ImGui::Button(button.name.c_str(), ImVec2(button_size, button_size));
+            }
+
+            // --- END of Icon Logic ---
+            
+            // Handle button click
+            if (buttonClicked)
             {
                 printf("Button '%s' (ID: %s) clicked! Action: %s(%s)\n", 
                        button.name.c_str(), button.id.c_str(), 
@@ -95,17 +189,23 @@ void UIManager::drawButtonGridWindow()
                 m_actionExecutor.executeAction(button.id);
             }
 
-            button_count++;
-            if (button_count % buttons_per_row != 0)
+            // Handle layout (wrapping)
+            button_index_in_row++;
+            // Check against desired items per row
+            if (button_index_in_row < buttons_per_row) 
             {
                 ImGui::SameLine();
             }
             else
             {
-                button_count = 0; // Reset for next row (or handle wrapping better)
+                button_index_in_row = 0; // Reset for the next row
             }
             ImGui::PopID();
         }
+         // Ensure the next item starts on a new line if the last row wasn't full
+         if (button_index_in_row != 0) {
+             ImGui::NewLine();
+         }
     }
 
     ImGui::End();
@@ -118,6 +218,7 @@ void UIManager::drawConfigurationWindow()
 
     const auto& buttons = m_configManager.getButtons(); // Get button data
 
+    // --- Loaded Buttons Table ---
     if (buttons.empty()) {
         // Use translated text
         ImGui::TextUnformatted(m_translator.get("no_buttons_loaded").c_str());
@@ -142,20 +243,28 @@ void UIManager::drawConfigurationWindow()
 
                 ImGui::TableSetColumnIndex(2);
                 ImGui::PushID(button.id.c_str()); 
-                // Edit button logic
+                // --- MODIFIED: Edit Button Behavior ---
                 if (ImGui::SmallButton(m_translator.get("edit_button_label").c_str())) {
                     // Fetch the full config for the button to edit
                     auto buttonToEditOpt = m_configManager.getButtonById(button.id);
                     if (buttonToEditOpt) {
                         const auto& btnCfg = *buttonToEditOpt;
-                        // Populate the editing state variables
-                        m_editingButtonId = btnCfg.id;
-                        strncpy(m_editButtonName, btnCfg.name.c_str(), IM_ARRAYSIZE(m_editButtonName) - 1); m_editButtonName[IM_ARRAYSIZE(m_editButtonName) - 1] = 0;
-                        strncpy(m_editButtonActionType, btnCfg.action_type.c_str(), IM_ARRAYSIZE(m_editButtonActionType) - 1); m_editButtonActionType[IM_ARRAYSIZE(m_editButtonActionType) - 1] = 0;
-                        strncpy(m_editButtonActionParam, btnCfg.action_param.c_str(), IM_ARRAYSIZE(m_editButtonActionParam) - 1); m_editButtonActionParam[IM_ARRAYSIZE(m_editButtonActionParam) - 1] = 0;
-                        // strncpy(m_editButtonIconPath, btnCfg.icon_path.c_str(), IM_ARRAYSIZE(m_editButtonIconPath) - 1); m_editButtonIconPath[IM_ARRAYSIZE(m_editButtonIconPath) - 1] = 0;
-                        
-                        m_showEditModal = true; // Set flag to show the modal
+                        // Set editing mode and load data into the "Add New" fields
+                        m_editingButtonId = btnCfg.id; // Mark as editing this ID
+                        // Load data into the m_newButton... variables
+                        strncpy(m_newButtonId, btnCfg.id.c_str(), IM_ARRAYSIZE(m_newButtonId) - 1); m_newButtonId[IM_ARRAYSIZE(m_newButtonId) - 1] = 0;
+                        strncpy(m_newButtonName, btnCfg.name.c_str(), IM_ARRAYSIZE(m_newButtonName) - 1); m_newButtonName[IM_ARRAYSIZE(m_newButtonName) - 1] = 0;
+                        m_newButtonActionTypeIndex = 0; // Default to first if not found
+                        for(size_t i = 0; i < m_supportedActionTypes.size(); ++i) {
+                            if (m_supportedActionTypes[i] == btnCfg.action_type) {
+                                m_newButtonActionTypeIndex = static_cast<int>(i);
+                                break;
+                            }
+                        }
+                        strncpy(m_newButtonActionParam, btnCfg.action_param.c_str(), IM_ARRAYSIZE(m_newButtonActionParam) - 1); m_newButtonActionParam[IM_ARRAYSIZE(m_newButtonActionParam) - 1] = 0;
+                        strncpy(m_newButtonIconPath, btnCfg.icon_path.c_str(), IM_ARRAYSIZE(m_newButtonIconPath) - 1); m_newButtonIconPath[IM_ARRAYSIZE(m_newButtonIconPath) - 1] = 0;
+
+                        std::cout << "Editing button: " << m_editingButtonId << std::endl; // Log edit start
                     } else {
                          std::cerr << "Error: Could not find button data for ID: " << button.id << " to edit." << std::endl;
                     }
@@ -173,73 +282,176 @@ void UIManager::drawConfigurationWindow()
     
     ImGui::Separator();
 
-    // --- Section to Add New Buttons ---
-    // Use translated header
-    ImGui::TextUnformatted(m_translator.get("add_new_button_header").c_str());
+    // --- MODIFIED: Section for Add/Edit Button ---
+    bool isEditing = !m_editingButtonId.empty();
+    // Use translated header or custom Edit header
+    ImGui::TextUnformatted(isEditing ? m_translator.get("edit_button_header").c_str() : m_translator.get("add_new_button_header").c_str()); 
     
-    // Use translated labels for input fields
-    ImGui::InputText(m_translator.get("button_id_label").c_str(), m_newButtonId, IM_ARRAYSIZE(m_newButtonId));
+    // Button ID Input (Read-only when editing)
+    ImGuiInputTextFlags idFlags = isEditing ? ImGuiInputTextFlags_ReadOnly : ImGuiInputTextFlags_None;
+    ImGui::InputText(m_translator.get("button_id_label").c_str(), m_newButtonId, IM_ARRAYSIZE(m_newButtonId), idFlags);
     ImGui::SameLine(); ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered()) {
-        ImGui::BeginTooltip();
-        // Use translated tooltip
-        ImGui::TextUnformatted(m_translator.get("button_id_tooltip").c_str());
-        ImGui::EndTooltip();
+    // Use ImGui::SetTooltip for simpler tooltip display
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("button_id_tooltip").c_str()); }
+    if (isEditing) {
+        ImGui::SameLine(); ImGui::TextDisabled("(Cannot be changed)");
     }
 
+    // Button Name Input
     ImGui::InputText(m_translator.get("button_name_label").c_str(), m_newButtonName, IM_ARRAYSIZE(m_newButtonName));
     ImGui::SameLine(); ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered()) {
-        ImGui::BeginTooltip();
-        // Use translated tooltip
-        ImGui::TextUnformatted(m_translator.get("button_name_tooltip").c_str());
-        ImGui::EndTooltip();
-    }
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("button_name_tooltip").c_str()); }
 
-    ImGui::InputText(m_translator.get("action_type_label").c_str(), m_newButtonActionType, IM_ARRAYSIZE(m_newButtonActionType)); 
+    // Action Type Combo Box (Add New)
+    std::vector<const char*> actionTypeDisplayItems; 
+    for(const auto& type : m_supportedActionTypes) {
+        std::string translationKey = "action_type_" + type + "_display";
+        actionTypeDisplayItems.push_back(m_translator.get(translationKey).c_str());
+    }
+    ImGui::Combo("##AddActionTypeCombo", &m_newButtonActionTypeIndex, actionTypeDisplayItems.data(), actionTypeDisplayItems.size());
+    ImGui::SameLine();
+    ImGui::TextUnformatted(m_translator.get("action_type_label").c_str());
     ImGui::SameLine(); ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered()) {
-        ImGui::BeginTooltip();
-        // Use translated tooltip
-        ImGui::TextUnformatted(m_translator.get("action_type_tooltip").c_str());
-        ImGui::EndTooltip();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)) { 
+        ImGui::SetTooltip("%s", m_translator.get("action_type_tooltip").c_str());
     }
 
+    // Action Param Input (Add New)
     ImGui::InputText(m_translator.get("action_param_label").c_str(), m_newButtonActionParam, IM_ARRAYSIZE(m_newButtonActionParam));
-    ImGui::SameLine(); ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered()) {
-        ImGui::BeginTooltip();
-        // Use translated tooltip
-        ImGui::TextUnformatted(m_translator.get("action_param_tooltip").c_str());
-        ImGui::EndTooltip();
+    ImGui::SameLine(); 
+    bool isLaunchAppSelected = (m_newButtonActionTypeIndex >= 0 && m_newButtonActionTypeIndex < m_supportedActionTypes.size() && 
+                                m_supportedActionTypes[m_newButtonActionTypeIndex] == "launch_app");
+    if (isLaunchAppSelected) {
+        // --- RESTORED: Direct Dialog Open ---
+        if (ImGui::Button("...##AddBrowse")) { 
+            const char* key = "SelectAppDlgKey_AddEdit"; // Use one key for both add/edit now
+            const char* title = "Select Application File";
+            const char* filters = ".exe{,.*}"; // Show .exe first, then all files
+            std::string startingPath = "."; 
+            // Directly open dialog
+            ImGuiFileDialog::Instance()->OpenDialog(key, title, filters, {
+                .path = startingPath,
+                .fileName = "",
+                .filePathName = "",
+                .countSelectionMax = 1,
+                .userDatas = (void*)"AddEditActionParam", // Use unified user data id
+                .flags = ImGuiFileDialogFlags_Modal |
+                         ImGuiFileDialogFlags_DisableThumbnailMode | 
+                         ImGuiFileDialogFlags_DisablePlaceMode | 
+                         ImGuiFileDialogFlags_HideColumnType | 
+                         ImGuiFileDialogFlags_HideColumnSize | 
+                         ImGuiFileDialogFlags_HideColumnDate | 
+                         ImGuiFileDialogFlags_DisableCreateDirectoryButton
+            });
+        }
+         ImGui::SameLine(); // Keep tooltip marker on the same line
+    }
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)) { 
+        ImGui::SetTooltip("%s", m_translator.get("action_param_tooltip").c_str());
     }
 
-    // Use translated label for Add button
-    if (ImGui::Button(m_translator.get("add_button_label").c_str())) {
-        ButtonConfig newButton;
-        newButton.id = m_newButtonId;
-        newButton.name = m_newButtonName;
-        newButton.action_type = m_newButtonActionType;
-        newButton.action_param = m_newButtonActionParam;
+    // Icon Path Input (Add New)
+    ImGui::InputText(m_translator.get("button_icon_label").c_str(), m_newButtonIconPath, IM_ARRAYSIZE(m_newButtonIconPath)); 
+    ImGui::SameLine();
+    // --- RESTORED: Direct Dialog Open ---
+    if (ImGui::Button("...##AddIconBrowse")) { 
+        const char* key = "SelectIconDlgKey_AddEdit"; // Use one key
+        const char* title = "Select Button Icon";
+        const char* filters = ".*"; // Show all files by default
+        std::string startingPath = "."; // Maybe start in assets?
+        // Directly open dialog
+        ImGuiFileDialog::Instance()->OpenDialog(key, title, filters, {
+            .path = startingPath,
+            .countSelectionMax = 1,
+            .userDatas = (void*)"AddEditIconPath", // Use unified user data id
+            .flags = ImGuiFileDialogFlags_Modal |
+                     ImGuiFileDialogFlags_DisableThumbnailMode |
+                     ImGuiFileDialogFlags_DisablePlaceMode |
+                     ImGuiFileDialogFlags_HideColumnType |
+                     ImGuiFileDialogFlags_HideColumnSize |
+                     ImGuiFileDialogFlags_HideColumnDate |
+                     ImGuiFileDialogFlags_DisableCreateDirectoryButton
+        });
+    }
+    ImGui::SameLine(); ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)) {
+        ImGui::SetTooltip("%s", m_translator.get("button_icon_tooltip").c_str());
+    }
 
-        if (m_configManager.addButton(newButton)) {
-            // Use translated log message (or keep logs in English? Decision needed)
-            std::cout << m_translator.get("button_added_success_log") << newButton.id << std::endl;
-            if (m_configManager.saveConfig()) {
-                 std::cout << m_translator.get("config_saved_add_log") << std::endl;
-                 m_newButtonId[0] = '\0';
-                 m_newButtonName[0] = '\0';
-                 m_newButtonActionType[0] = '\0';
-                 m_newButtonActionParam[0] = '\0';
+    // --- MODIFIED: Submit Button (Add/Save) ---
+    const char* submitLabel = isEditing ? m_translator.get("save_changes_button_label").c_str() : m_translator.get("add_button_label").c_str();
+    if (ImGui::Button(submitLabel)) {
+        ButtonConfig buttonData;
+        // Populate common fields
+        buttonData.name = m_newButtonName;
+        if (m_newButtonActionTypeIndex >= 0 && m_newButtonActionTypeIndex < m_supportedActionTypes.size()) {
+             buttonData.action_type = m_supportedActionTypes[m_newButtonActionTypeIndex];
+        } else {
+            buttonData.action_type = ""; // Handle error or default
+            std::cerr << "Warning: Invalid action type index." << std::endl;
+        }
+        buttonData.action_param = m_newButtonActionParam;
+        buttonData.icon_path = m_newButtonIconPath; // Assign icon path
+
+        if (isEditing) {
+            // --- Update Logic ---
+            buttonData.id = m_editingButtonId; // Use the stored ID for update
+            // Basic validation for updated button (ensure name is not empty)
+            if (buttonData.name.empty()) {
+                std::cerr << "Error: Updated button name cannot be empty." << std::endl;
+            } else if (m_configManager.updateButton(m_editingButtonId, buttonData)) {
+                std::cout << "Button updated successfully: " << m_editingButtonId << std::endl;
+                if (m_configManager.saveConfig()) {
+                    std::cout << "Configuration saved after updating button." << std::endl;
+                    // Clear fields and exit edit mode
+                    m_newButtonId[0] = '\0'; m_newButtonName[0] = '\0'; m_newButtonActionTypeIndex = -1;
+                    m_newButtonActionParam[0] = '\0'; m_newButtonIconPath[0] = '\0';
+                    m_editingButtonId = ""; // Exit edit mode
+                } else { 
+                    std::cerr << "Error: Failed to save configuration after updating button." << std::endl; 
+                }
             } else {
-                std::cerr << m_translator.get("config_save_fail_add_log") << std::endl;
+                 std::cerr << "Error: Failed to update button " << m_editingButtonId << " (check console)." << std::endl;
             }
         } else {
-            std::cerr << m_translator.get("add_button_fail_log") << std::endl;
+            // --- Add Logic ---
+            buttonData.id = m_newButtonId; // Use the ID from the input field
+             // Basic validation: Check for empty ID or Name
+            if (buttonData.id.empty() || buttonData.name.empty()) {
+                std::cerr << "Error: Cannot add button with empty ID or Name." << std::endl;
+            } else if (m_configManager.addButton(buttonData)) {
+                std::cout << m_translator.get("button_added_success_log") << buttonData.id << std::endl;
+                if (m_configManager.saveConfig()) {
+                     std::cout << m_translator.get("config_saved_add_log") << std::endl;
+                     m_newButtonId[0] = '\0';
+                     m_newButtonName[0] = '\0';
+                     m_newButtonActionTypeIndex = -1; // Reset index
+                     m_newButtonActionParam[0] = '\0';
+                     m_newButtonIconPath[0] = '\0'; // Clear icon path field
+                } else {
+                    std::cerr << m_translator.get("config_save_fail_add_log") << std::endl;
+                }
+            } else {
+                std::cerr << m_translator.get("add_button_fail_log") << std::endl;
+            }
         }
     }
 
-    // --- Delete Confirmation Modal ---
+    // --- ADDED: Cancel Button (only in edit mode) ---
+    if (isEditing) {
+        ImGui::SameLine();
+        if (ImGui::Button(m_translator.get("cancel_button_label").c_str())) {
+             // Clear fields and exit edit mode
+             m_newButtonId[0] = '\0'; m_newButtonName[0] = '\0'; m_newButtonActionTypeIndex = -1;
+             m_newButtonActionParam[0] = '\0'; m_newButtonIconPath[0] = '\0';
+             m_editingButtonId = ""; // Exit edit mode
+             std::cout << "Edit cancelled for button ID: " << m_editingButtonId << std::endl; // Note: m_editingButtonId is empty now
+        }
+    }
+
+
+    // --- Delete Confirmation Modal --- (Remains the same)
     if (m_showDeleteConfirmation) {
         // Use translated title
         ImGui::OpenPopup(m_translator.get("delete_confirm_title").c_str());
@@ -263,7 +475,6 @@ void UIManager::drawConfigurationWindow()
                     std::cerr << m_translator.get("config_save_fail_delete_log") << std::endl;
                 }
             } else {
-                 // Combine log parts
                  std::cerr << m_translator.get("remove_button_fail_log") << m_buttonIdToDelete 
                            << m_translator.get("remove_button_fail_log_suffix") << std::endl;
             }
@@ -281,58 +492,52 @@ void UIManager::drawConfigurationWindow()
         ImGui::EndPopup();
     }
 
-    // --- Edit Button Modal --- 
-    if (m_showEditModal) {
-        ImGui::OpenPopup("Edit Button"); // Use a simple title for the popup ID
-        m_showEditModal = false; // Reset flag after opening popup
+    // --- MODIFIED: ImGuiFileDialog Display and Handling ---
+    std::string selectedFilePath;
+    bool updateParam = false; // Combined flag for action param
+    bool updateIcon = false;  // Combined flag for icon path
+
+    // Define display settings for the dialog
+    ImVec2 minSize = ImVec2(600, 400);
+    ImVec2 maxSize = ImVec2(FLT_MAX, FLT_MAX);
+
+    // Display the dialog if opened (for selecting App File)
+    if (ImGuiFileDialog::Instance()->Display("SelectAppDlgKey_AddEdit", ImGuiWindowFlags_NoCollapse, minSize, maxSize)) {
+        if (ImGuiFileDialog::Instance()->IsOk()) { // Action if OK button is pressed
+            selectedFilePath = ImGuiFileDialog::Instance()->GetFilePathName();
+            const char* userDataStr = static_cast<const char*>(ImGuiFileDialog::Instance()->GetUserDatas());
+            if (userDataStr && strcmp(userDataStr, "AddEditActionParam") == 0) {
+                updateParam = true;
+            } 
+        }
+        ImGuiFileDialog::Instance()->Close();
     }
 
-    // Define the modal window for editing
-    if (ImGui::BeginPopupModal("Edit Button", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("Editing Button ID: %s (Cannot be changed)", m_editingButtonId.c_str());
-        ImGui::Separator();
-
-        ImGui::InputText(m_translator.get("button_name_label").c_str(), m_editButtonName, IM_ARRAYSIZE(m_editButtonName));
-        // TODO: Add tooltips like in the Add section
-        ImGui::InputText(m_translator.get("action_type_label").c_str(), m_editButtonActionType, IM_ARRAYSIZE(m_editButtonActionType));
-        ImGui::InputText(m_translator.get("action_param_label").c_str(), m_editButtonActionParam, IM_ARRAYSIZE(m_editButtonActionParam));
-        // TODO: Input for icon path if needed
-
-        ImGui::Separator();
-
-        // Use translated labels
-        if (ImGui::Button(m_translator.get("save_changes_button_label").c_str(), ImVec2(120, 0))) { // Need key "save_changes_button_label"
-            ButtonConfig updatedButton;
-            updatedButton.id = m_editingButtonId; // Keep original ID
-            updatedButton.name = m_editButtonName;
-            updatedButton.action_type = m_editButtonActionType;
-            updatedButton.action_param = m_editButtonActionParam;
-            // updatedButton.icon_path = m_editButtonIconPath;
-
-            if (m_configManager.updateButton(m_editingButtonId, updatedButton)) {
-                std::cout << "Button updated successfully: " << m_editingButtonId << std::endl;
-                if (m_configManager.saveConfig()) {
-                    std::cout << "Configuration saved after updating button." << std::endl;
-                } else {
-                    std::cerr << "Error: Failed to save configuration after updating button." << std::endl;
-                }
-            } else {
-                 std::cerr << "Error: Failed to update button " << m_editingButtonId << " (check console)." << std::endl;
-            }
-            ImGui::CloseCurrentPopup();
+    // Display the dialog if opened (for selecting Icon File)
+    if (ImGuiFileDialog::Instance()->Display("SelectIconDlgKey_AddEdit", ImGuiWindowFlags_NoCollapse, minSize, maxSize)) {
+        if (ImGuiFileDialog::Instance()->IsOk()) { 
+            selectedFilePath = ImGuiFileDialog::Instance()->GetFilePathName();
+             const char* userDataStr = static_cast<const char*>(ImGuiFileDialog::Instance()->GetUserDatas());
+              if (userDataStr && strcmp(userDataStr, "AddEditIconPath") == 0) {
+                updateIcon = true;
+            } 
         }
-        ImGui::SetItemDefaultFocus();
-        ImGui::SameLine();
-        // Use translated labels
-        if (ImGui::Button(m_translator.get("cancel_button_label").c_str(), ImVec2(120, 0))) { // Need key "cancel_button_label"
-            std::cout << "Edit cancelled for button ID: " << m_editingButtonId << std::endl;
-            ImGui::CloseCurrentPopup();
-        }
-
-        ImGui::EndPopup();
+        ImGuiFileDialog::Instance()->Close();
     }
 
-    ImGui::End();
+    // Update the buffer outside the Display scope based on flags
+    if (updateParam) {
+         // Update m_newButtonActionParam regardless of mode (Add or Edit)
+         strncpy(m_newButtonActionParam, selectedFilePath.c_str(), IM_ARRAYSIZE(m_newButtonActionParam) - 1);
+         m_newButtonActionParam[IM_ARRAYSIZE(m_newButtonActionParam) - 1] = 0; // Ensure null termination
+    }
+    if (updateIcon) {
+         // Update m_newButtonIconPath regardless of mode (Add or Edit)
+         strncpy(m_newButtonIconPath, selectedFilePath.c_str(), IM_ARRAYSIZE(m_newButtonIconPath) - 1);
+         m_newButtonIconPath[IM_ARRAYSIZE(m_newButtonIconPath) - 1] = 0; // Ensure null termination
+    }
+
+    ImGui::End(); // End of Configuration Window
 }
 
 void UIManager::drawStatusLogWindow()

@@ -94,10 +94,56 @@ function loadButtons(buttonLayout) {
             console.warn('Skipping button with missing id or name:', button);
             return; // Skip invalid button data
         }
+
+        // --- ADDED for debugging ---
+        console.log(`Processing button: ID=${button.id}, Name=${button.name}, IconPath='${button.icon_path}'`); 
+        // ---------------------------
+
         const btnElement = document.createElement('button');
         btnElement.className = 'grid-button';
-        btnElement.textContent = button.name;
         btnElement.onclick = () => sendButtonPress(button.id);
+
+        // --- ADDED: Icon Handling ---
+        if (button.icon_path && button.icon_path.trim() !== '') {
+             // --- ADDED for debugging ---
+             console.log(` -> Icon path found for ${button.id}: ${button.icon_path}. Creating img element.`);
+             // ---------------------------
+            // If icon_path exists and is not empty
+            btnElement.classList.add('has-icon'); // Add class for styling
+
+            // Create image element
+            const imgElement = document.createElement('img');
+            imgElement.src = button.icon_path; // Set the source (relative path)
+            imgElement.alt = button.name; // Use button name as alt text
+            imgElement.onerror = () => {
+                // Handle image loading errors (e.g., show text instead)
+                console.error(`Failed to load icon: ${button.icon_path}`);
+                imgElement.remove(); // Remove the broken image element
+                // Optionally add text content back if image fails
+                if (!btnElement.querySelector('.button-text')) { 
+                     const textElementFallback = document.createElement('span');
+                     textElementFallback.className = 'button-text';
+                     textElementFallback.textContent = button.name;
+                     btnElement.appendChild(textElementFallback);
+                }
+            };
+            btnElement.appendChild(imgElement);
+
+            // Add text label below/next to the icon 
+            const textElement = document.createElement('span');
+            textElement.className = 'button-text'; // Add class for styling
+            textElement.textContent = button.name;
+            btnElement.appendChild(textElement);
+
+        } else {
+             // --- ADDED for debugging ---
+             console.log(` -> No valid icon path for ${button.id}. Using text only.`);
+             // ---------------------------
+            // No icon_path provided, just show text
+            btnElement.textContent = button.name;
+        }
+        // --- END of Icon Handling ---
+
         buttonGrid.appendChild(btnElement);
     });
 }

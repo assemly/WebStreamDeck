@@ -2,6 +2,7 @@
 
 #include <imgui.h>
 #include <string>
+#include <map>
 #include "ConfigManager.hpp"
 #include "ActionExecutor.hpp"
 #include "TranslationManager.hpp"
@@ -38,6 +39,22 @@ private:
 
     GLuint m_qrTextureId = 0; // Texture ID for the QR code
     std::string m_lastGeneratedQrText = ""; // Store the text used for the last generated QR code
+    std::map<std::string, GLuint> m_buttonIconTextures; // Added for icon textures
+
+    // State for adding/editing buttons (fields reused for both modes)
+    char m_newButtonId[128] = "";
+    char m_newButtonName[128] = "";
+    int m_newButtonActionTypeIndex = -1; // Index for combo box
+    char m_newButtonActionParam[256] = "";
+    char m_newButtonIconPath[256] = ""; // Added for icon path
+    std::string m_editingButtonId = ""; // ID of the button being edited (if any)
+
+    // State for delete confirmation
+    bool m_showDeleteConfirmation = false;
+    std::string m_buttonIdToDelete = "";
+
+    // List of supported action types (could be moved to ConfigManager or enum later)
+    const std::vector<std::string> m_supportedActionTypes = {"launch_app", "open_url", "hotkey"}; // Added hotkey
 
     // Private helper methods for drawing specific windows
     void drawButtonGridWindow();
@@ -51,23 +68,5 @@ private:
     void generateQrTexture(const std::string& text); // Helper to generate/update texture
     void releaseQrTexture(); // Helper to release texture
 
-    // Add any UI state variables here if needed later
-    // bool show_demo_window = false; 
-    std::string m_buttonIdToDelete = ""; // Store the ID of the button marked for deletion
-    bool m_showDeleteConfirmation = false; // Flag to control the visibility of the delete confirmation modal
-
-    // State for adding a new button
-    char m_newButtonId[128] = "";
-    char m_newButtonName[128] = "";
-    char m_newButtonActionType[128] = ""; // Consider using a dropdown later
-    char m_newButtonActionParam[256] = "";
-    // char m_newButtonIconPath[256] = ""; // Optional icon path
-
-    // State for editing an existing button
-    std::string m_editingButtonId = ""; // ID of the button being edited (read-only in UI)
-    char m_editButtonName[128] = "";
-    char m_editButtonActionType[128] = "";
-    char m_editButtonActionParam[256] = "";
-    // char m_editButtonIconPath[256] = ""; // Optional icon path
-    bool m_showEditModal = false; // Flag to control edit modal visibility
+    GLuint LoadTextureFromFile(const char* filename); // Added for icon loading
 }; 

@@ -49,5 +49,11 @@
     "remove_button_fail_log_suffix": " (maybe already removed?).",
     "delete_cancel_log": "Deletion cancelled for button ID: ",
     "save_changes_button_label": "Save Changes",
-    "cancel_button_label": "Cancel"
+    "cancel_button_label": "Cancel",
+    "action_type_launch_app_display": "Launch App",
+    "action_type_open_url_display": "Open URL",
+    "action_type_hotkey_display": "Hotkey",
+    "button_icon_label": "Icon Path",
+    "button_icon_tooltip": "Optional: Relative path to the button icon (e.g., assets/icons/my_icon.png). Leave empty for no icon.",
+    "edit_button_header": "Edit Button:"
 }

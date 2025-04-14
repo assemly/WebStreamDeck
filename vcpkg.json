@@ -5,6 +5,7 @@
     "glfw3",
     "nlohmann-json",
     "uwebsockets",
-    "glew"
+    "glew",
+    "stb"
   ]
 } 

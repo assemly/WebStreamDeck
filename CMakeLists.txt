@@ -13,6 +13,7 @@ add_library(imgui
     third_party/imgui/imgui_demo.cpp
     third_party/imgui/backends/imgui_impl_glfw.cpp
     third_party/imgui/backends/imgui_impl_opengl3.cpp
+    third_party/imgui/ImGuiFileDialog.cpp
 )
 
 target_include_directories(imgui PUBLIC
@@ -34,10 +35,14 @@ find_package(Threads REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED) # Find nlohmann_json via vcpkg
 find_package(unofficial-uwebsockets CONFIG REQUIRED)  # CORRECTED: Use package name from vcpkg output
 find_package(GLEW REQUIRED) # Find GLEW
+find_package(Stb REQUIRED) # Find stb via vcpkg (Module mode, Capitalized)
 
 # Add local third-party library: qrcodegen
 add_library(qrcodegen_lib third_party/QR-Code-generator-1.8.0/qrcodegen.cpp)
 target_include_directories(qrcodegen_lib PUBLIC third_party/QR-Code-generator-1.8.0)
+
+# Ensure stb directory is included (though stb_image is header-only for includes)
+# target_include_directories(${PROJECT_NAME} PRIVATE third_party/stb) # REMOVED this line
 
 # Add the executable
 add_executable(${PROJECT_NAME}
@@ -60,6 +65,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     nlohmann_json::nlohmann_json # Link nlohmann_json target
     unofficial::uwebsockets::uwebsockets     # CORRECTED: Use target name from vcpkg output
     qrcodegen_lib         # Link the local qrcodegen library target
+    # stb::stb              # Link stb via vcpkg # REMOVED: stb is likely header-only, no target to link
 )
 
 # Copy the web directory to the executable output directory after build
@@ -85,6 +91,14 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         ${CMAKE_SOURCE_DIR}/assets/fonts # Source fonts directory
         $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets/fonts # Destination fonts directory
     COMMENT "Copying font assets to output directory"
+)
+
+# Copy the icons directory from assets to the executable output directory after build
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+        ${CMAKE_SOURCE_DIR}/assets/icons # Source icons directory (adjust if needed)
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets/icons # Destination icons directory
+    COMMENT "Copying icon assets to output directory"
 )
 
 # Optional: Show console window on Windows alongside GUI (uses standard 'main' entry point)

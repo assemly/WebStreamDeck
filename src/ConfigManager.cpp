@@ -164,7 +164,7 @@ bool ConfigManager::updateButton(const std::string& id, const ButtonConfig& upda
             button.name = updatedButton.name;
             button.action_type = updatedButton.action_type;
             button.action_param = updatedButton.action_param;
-            // button.icon_path = updatedButton.icon_path; // If using icons
+            button.icon_path = updatedButton.icon_path; // UNCOMMENTED: If using icons
             
             // REMOVED: Do not save immediately
             // return saveConfig(); 
