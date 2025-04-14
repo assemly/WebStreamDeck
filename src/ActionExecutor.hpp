@@ -18,6 +18,6 @@ private:
     // Private helper methods for specific action types (optional)
     bool executeLaunchApp(const std::string& path);
     bool executeOpenUrl(const std::string& url);
-    // bool executeHotkey(const std::string& keys); // Add later
+    bool executeHotkey(const std::string& keys);
     // bool executeSystemCommand(const std::string& command); // Add later
 }; 

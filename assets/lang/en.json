@@ -11,7 +11,7 @@
     "button_id_tooltip": "Unique identifier for the button (e.g., 'btn_app_xyz'). Cannot be changed later.",
     "button_name_tooltip": "The text displayed on the button in the web interface and button grid.",
     "action_type_tooltip": "Type of action to perform (e.g., 'launch_app', 'open_url', 'hotkey').",
-    "action_param_tooltip": "Parameter for the action type:\n- launch_app: Full path to the executable (e.g., C:\\Windows\\notepad.exe)\n- open_url: The URL to open (e.g., https://www.google.com)\n- hotkey: Key combination (e.g., CTRL+ALT+T) [Not fully implemented yet]",
+    "action_param_tooltip": "Parameter for the action type:\n- launch_app: Full path to the executable (e.g., C:\\Windows\\notepad.exe)\n- open_url: The URL to open (e.g., https://www.google.com)\n- hotkey: Key combination (e.g., CTRL+ALT+T, SHIFT+F5, WIN+D). Use + to combine keys.",
     "add_button_label": "Add Button",
     "edit_button_label": "Edit",
     "delete_button_label": "Delete",
@@ -55,5 +55,12 @@
     "action_type_hotkey_display": "Hotkey",
     "button_icon_label": "Icon Path",
     "button_icon_tooltip": "Optional: Relative path to the button icon (e.g., assets/icons/my_icon.png). Leave empty for no icon.",
-    "edit_button_header": "Edit Button:"
+    "edit_button_header": "Edit Button:",
+    "hotkey_capture_prompt": "Capturing... (ESC to cancel) [%s]",
+    "hotkey_capture_tooltip_start": "Click to capture hotkey OR type manually (e.g., CTRL+ALT+T, WIN+D). Win key combos often require manual input.",
+    "hotkey_capture_tooltip_capturing": "Press desired hotkey combination, or ESC to cancel.",
+    "hotkey_manual_input_checkbox": "Manual Input",
+    "hotkey_manual_input_tooltip": "Check this box to manually type the hotkey string (e.g., CTRL+ALT+T). Uncheck to enable click-to-capture.",
+    "browse_button_label": "...",
+    "select_app_dialog_title": "Select Application File"
 }

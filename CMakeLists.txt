@@ -36,6 +36,7 @@ find_package(nlohmann_json CONFIG REQUIRED) # Find nlohmann_json via vcpkg
 find_package(unofficial-uwebsockets CONFIG REQUIRED)  # CORRECTED: Use package name from vcpkg output
 find_package(GLEW REQUIRED) # Find GLEW
 find_package(Stb REQUIRED) # Find stb via vcpkg (Module mode, Capitalized)
+find_package(GIF REQUIRED) 
 
 # Add local third-party library: qrcodegen
 add_library(qrcodegen_lib third_party/QR-Code-generator-1.8.0/qrcodegen.cpp)
@@ -52,6 +53,8 @@ add_executable(${PROJECT_NAME}
     src/ActionExecutor.cpp
     src/CommServer.cpp   # Add the new CommServer source file
     src/TranslationManager.cpp # Added TranslationManager source file
+    src/InputUtils.cpp # <<< ADDED
+    src/GifLoader.cpp # ADDED GifLoader source file
 )
 
 # Tell ImGui to use GLEW
@@ -66,6 +69,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     unofficial::uwebsockets::uwebsockets     # CORRECTED: Use target name from vcpkg output
     qrcodegen_lib         # Link the local qrcodegen library target
     # stb::stb              # Link stb via vcpkg # REMOVED: stb is likely header-only, no target to link
+    GIF::GIF              # ADDED: Link against giflib target (as suggested by vcpkg)
 )
 
 # Copy the web directory to the executable output directory after build

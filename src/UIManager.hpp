@@ -6,15 +6,17 @@
 #include "ConfigManager.hpp"
 #include "ActionExecutor.hpp"
 #include "TranslationManager.hpp"
+#include "InputUtils.hpp"
+#include "GifLoader.hpp"
 // Removed: #include <GL/gl.h> // GLuint is now defined via GLEW included in main.cpp or implicitly
 
 // Define GLuint manually if needed, or rely on it being included via other headers
 // For clarity, explicitly including <GL/glew.h> might be better if direct GL calls were made here,
 // but for just the type GLuint, it's often implicitly available.
 // Let's rely on implicit for now. If compilation fails, we might need <glad/gl.h> or ensure glew.h propagation.
-#ifndef GLuint // Basic guard in case it's not defined elsewhere yet
-    typedef unsigned int GLuint;
-#endif
+// #ifndef GLuint // Basic guard in case it's not defined elsewhere yet
+//     typedef unsigned int GLuint;
+// #endif
 
 class UIManager
 {
@@ -40,6 +42,7 @@ private:
     GLuint m_qrTextureId = 0; // Texture ID for the QR code
     std::string m_lastGeneratedQrText = ""; // Store the text used for the last generated QR code
     std::map<std::string, GLuint> m_buttonIconTextures; // Added for icon textures
+    std::map<std::string, GifLoader::AnimatedGif> m_animatedGifTextures; 
 
     // State for adding/editing buttons (fields reused for both modes)
     char m_newButtonId[128] = "";
@@ -48,6 +51,8 @@ private:
     char m_newButtonActionParam[256] = "";
     char m_newButtonIconPath[256] = ""; // Added for icon path
     std::string m_editingButtonId = ""; // ID of the button being edited (if any)
+    bool m_isCapturingHotkey = false; // Flag to indicate hotkey capture mode
+    bool m_manualHotkeyEntry = false; // ADDED: Flag to toggle manual hotkey input
 
     // State for delete confirmation
     bool m_showDeleteConfirmation = false;
@@ -69,4 +74,5 @@ private:
     void releaseQrTexture(); // Helper to release texture
 
     GLuint LoadTextureFromFile(const char* filename); // Added for icon loading
+    void releaseAnimatedGifTextures(); // Keep this for UIManager resource cleanup
 }; 

@@ -76,6 +76,18 @@ GLuint UIManager::LoadTextureFromFile(const char* filename) {
 
 // --- End of LoadTextureFromFile --- 
 
+// --- ADDED: Implementation for releasing animated GIF textures ---
+void UIManager::releaseAnimatedGifTextures() {
+    for (auto const& [path, gifData] : m_animatedGifTextures) {
+        if (gifData.loaded) {
+            glDeleteTextures(gifData.frameTextureIds.size(), gifData.frameTextureIds.data());
+             std::cout << "Deleted " << gifData.frameTextureIds.size() << " GIF textures for: " << path << std::endl;
+        }
+    }
+    m_animatedGifTextures.clear();
+}
+// --- End of releaseAnimatedGifTextures --- 
+
 UIManager::UIManager(ConfigManager& configManager, ActionExecutor& actionExecutor, TranslationManager& translationManager)
     : m_configManager(configManager),
       m_actionExecutor(actionExecutor),
@@ -84,19 +96,21 @@ UIManager::UIManager(ConfigManager& configManager, ActionExecutor& actionExecuto
     updateLocalIP(); // Get IP on startup
 }
 
-// --- MODIFIED: Destructor to include texture cleanup ---
+// --- MODIFIED: Destructor to include GIF texture cleanup --- 
 UIManager::~UIManager()
 {
     releaseQrTexture(); // Release QR code texture (already present)
 
-    // Release button icon textures
+    // Release button icon textures (static)
     for (auto const& [path, textureId] : m_buttonIconTextures) {
         if (textureId != 0) { // Only delete valid texture IDs
             glDeleteTextures(1, &textureId);
-             std::cout << "Deleted texture for: " << path << " (ID: " << textureId << ")" << std::endl;
+             std::cout << "Deleted static texture for: " << path << " (ID: " << textureId << ")" << std::endl;
         }
     }
     m_buttonIconTextures.clear(); // Clear the map
+
+    releaseAnimatedGifTextures(); // ADDED: Release animated GIF textures
 }
 
 void UIManager::drawUI()
@@ -116,6 +130,7 @@ void UIManager::drawButtonGridWindow()
     ImGui::Begin(m_translator.get("button_grid_window_title").c_str());
 
     const std::vector<ButtonConfig>& buttons = m_configManager.getButtons();
+    double currentTime = ImGui::GetTime(); // Get current time for animation
 
     if (buttons.empty()) {
         // Use translated text (reusing key from config window)
@@ -129,38 +144,64 @@ void UIManager::drawButtonGridWindow()
         {
             ImGui::PushID(button.id.c_str()); // Use button ID for unique ImGui ID
             
-            // --- ADDED: Icon Loading and Button Type Selection --- 
-            GLuint textureID = 0; // Texture ID for this button's icon (if any)
+            GLuint textureID = 0; // Final texture ID to display
             bool useImageButton = false;
+            std::string lowerIconPath = button.icon_path;
+            std::transform(lowerIconPath.begin(), lowerIconPath.end(), lowerIconPath.begin(), ::tolower); // Convert to lowercase for extension check
 
-            // Check if an icon path is provided
+            // --- MODIFIED: Icon Loading Logic --- 
             if (!button.icon_path.empty()) {
-                // Check if texture is already loaded and cached
-                auto it = m_buttonIconTextures.find(button.icon_path);
-                if (it != m_buttonIconTextures.end()) {
-                    // Texture already loaded
-                    textureID = it->second;
-                    if (textureID != 0) { // Make sure cached ID is valid
+                if (lowerIconPath.length() > 4 && lowerIconPath.substr(lowerIconPath.length() - 4) == ".gif") {
+                    // --- Handle Animated GIF --- 
+                    auto it = m_animatedGifTextures.find(button.icon_path);
+                    if (it == m_animatedGifTextures.end()) {
+                        // Not loaded yet, try to load
+                        GifLoader::AnimatedGif gifData;
+                        if (GifLoader::LoadAnimatedGifFromFile(button.icon_path.c_str(), gifData)) {
+                            gifData.lastFrameTime = currentTime; // Initialize timing on load
+                             m_animatedGifTextures[button.icon_path] = std::move(gifData); // Move loaded data into map
+                             it = m_animatedGifTextures.find(button.icon_path); // Get iterator again
+                        } else {
+                            // Loading failed, cache the failure (empty struct with loaded=false)
+                            m_animatedGifTextures[button.icon_path] = {}; 
+                             std::cerr << "Failed to load GIF for button '" << button.id << "' from path: " << button.icon_path << std::endl;
+                        }
+                    }
+
+                    if (it != m_animatedGifTextures.end() && it->second.loaded && !it->second.frameTextureIds.empty()) {
+                        // GIF is loaded, update animation frame
+                        GifLoader::AnimatedGif& gif = it->second;
+                        double timeSinceLastFrame = currentTime - gif.lastFrameTime;
+                        double frameDelaySeconds = static_cast<double>(gif.frameDelaysMs[gif.currentFrame]) / 1000.0;
+                        
+                        if (timeSinceLastFrame >= frameDelaySeconds) {
+                            gif.currentFrame = (gif.currentFrame + 1) % gif.frameTextureIds.size();
+                            gif.lastFrameTime = currentTime; // Reset timer for the new frame
+                        }
+                        textureID = gif.frameTextureIds[gif.currentFrame];
                         useImageButton = true;
                     }
                 } else {
-                    // Texture not loaded yet, try to load it now
-                    textureID = LoadTextureFromFile(button.icon_path.c_str());
-                    // Cache the result (even if loading failed, store 0)
-                    m_buttonIconTextures[button.icon_path] = textureID;
-                    if (textureID != 0) {
-                        useImageButton = true;
+                    // --- Handle Static Image (using stb_image via LoadTextureFromFile) --- 
+                    auto it = m_buttonIconTextures.find(button.icon_path);
+                    if (it != m_buttonIconTextures.end()) {
+                        textureID = it->second;
+                        if (textureID != 0) useImageButton = true;
                     } else {
-                        // Log error only once per failed load attempt
-                        std::cerr << "Failed to load texture for button '" << button.id << "' from path: " << button.icon_path << std::endl;
+                        textureID = LoadTextureFromFile(button.icon_path.c_str());
+                        m_buttonIconTextures[button.icon_path] = textureID;
+                        if (textureID != 0) {
+                            useImageButton = true;
+                        } else {
+                            std::cerr << "Failed to load static texture for button '" << button.id << "' from path: " << button.icon_path << std::endl;
+                        }
                     }
                 }
             }
 
-            // Determine button click action
+            // --- Button Rendering --- 
             bool buttonClicked = false;
-            if (useImageButton) {
-                 // Use ImageButton if texture is valid
+            if (useImageButton && textureID != 0) {
                  buttonClicked = ImGui::ImageButton(button.id.c_str(),
                                                     (ImTextureID)(intptr_t)textureID,
                                                     ImVec2(button_size, button_size),
@@ -168,16 +209,14 @@ void UIManager::drawButtonGridWindow()
                                                     ImVec2(1, 1),
                                                     ImVec4(0,0,0,0),
                                                     ImVec4(1,1,1,1));
-                 // Optional: Display button name as tooltip for image buttons
                  if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("%s", button.name.c_str());
                  }
             } else {
-                // Fallback to text button if no icon or loading failed
+                // Fallback to text button
                 buttonClicked = ImGui::Button(button.name.c_str(), ImVec2(button_size, button_size));
             }
-
-            // --- END of Icon Logic ---
+            // --- END of Button Rendering ---
             
             // Handle button click
             if (buttonClicked)
@@ -185,13 +224,11 @@ void UIManager::drawButtonGridWindow()
                 printf("Button '%s' (ID: %s) clicked! Action: %s(%s)\n", 
                        button.name.c_str(), button.id.c_str(), 
                        button.action_type.c_str(), button.action_param.c_str());
-                // Trigger the actual action execution here
                 m_actionExecutor.executeAction(button.id);
             }
 
             // Handle layout (wrapping)
             button_index_in_row++;
-            // Check against desired items per row
             if (button_index_in_row < buttons_per_row) 
             {
                 ImGui::SameLine();
@@ -205,7 +242,7 @@ void UIManager::drawButtonGridWindow()
          // Ensure the next item starts on a new line if the last row wasn't full
          if (button_index_in_row != 0) {
              ImGui::NewLine();
-         }
+        }
     }
 
     ImGui::End();
@@ -285,101 +322,175 @@ void UIManager::drawConfigurationWindow()
     // --- MODIFIED: Section for Add/Edit Button ---
     bool isEditing = !m_editingButtonId.empty();
     // Use translated header or custom Edit header
-    ImGui::TextUnformatted(isEditing ? m_translator.get("edit_button_header").c_str() : m_translator.get("add_new_button_header").c_str()); 
-    
-    // Button ID Input (Read-only when editing)
-    ImGuiInputTextFlags idFlags = isEditing ? ImGuiInputTextFlags_ReadOnly : ImGuiInputTextFlags_None;
-    ImGui::InputText(m_translator.get("button_id_label").c_str(), m_newButtonId, IM_ARRAYSIZE(m_newButtonId), idFlags);
-    ImGui::SameLine(); ImGui::TextDisabled("(?)");
-    // Use ImGui::SetTooltip for simpler tooltip display
-    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("button_id_tooltip").c_str()); }
-    if (isEditing) {
-        ImGui::SameLine(); ImGui::TextDisabled("(Cannot be changed)");
-    }
+    ImGui::TextUnformatted(isEditing ? m_translator.get("edit_button_header").c_str() : m_translator.get("add_new_button_header").c_str());
 
-    // Button Name Input
-    ImGui::InputText(m_translator.get("button_name_label").c_str(), m_newButtonName, IM_ARRAYSIZE(m_newButtonName));
-    ImGui::SameLine(); ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("button_name_tooltip").c_str()); }
+    // --- BEGIN TABLE LAYOUT --- 
+    // Use TableSetupColumn for better width control
+    if (ImGui::BeginTable("add_edit_form", 2, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_BordersInnerV )) {
+        ImGui::TableSetupColumn("Labels", ImGuiTableColumnFlags_WidthFixed, 120.0f); // Fixed width for labels
+        ImGui::TableSetupColumn("Inputs", ImGuiTableColumnFlags_WidthStretch);      // Stretchable inputs
 
-    // Action Type Combo Box (Add New)
-    std::vector<const char*> actionTypeDisplayItems; 
-    for(const auto& type : m_supportedActionTypes) {
-        std::string translationKey = "action_type_" + type + "_display";
-        actionTypeDisplayItems.push_back(m_translator.get(translationKey).c_str());
-    }
-    ImGui::Combo("##AddActionTypeCombo", &m_newButtonActionTypeIndex, actionTypeDisplayItems.data(), actionTypeDisplayItems.size());
-    ImGui::SameLine();
-    ImGui::TextUnformatted(m_translator.get("action_type_label").c_str());
-    ImGui::SameLine(); ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)) { 
-        ImGui::SetTooltip("%s", m_translator.get("action_type_tooltip").c_str());
-    }
-
-    // Action Param Input (Add New)
-    ImGui::InputText(m_translator.get("action_param_label").c_str(), m_newButtonActionParam, IM_ARRAYSIZE(m_newButtonActionParam));
-    ImGui::SameLine(); 
-    bool isLaunchAppSelected = (m_newButtonActionTypeIndex >= 0 && m_newButtonActionTypeIndex < m_supportedActionTypes.size() && 
-                                m_supportedActionTypes[m_newButtonActionTypeIndex] == "launch_app");
-    if (isLaunchAppSelected) {
-        // --- RESTORED: Direct Dialog Open ---
-        if (ImGui::Button("...##AddBrowse")) { 
-            const char* key = "SelectAppDlgKey_AddEdit"; // Use one key for both add/edit now
-            const char* title = "Select Application File";
-            const char* filters = ".exe{,.*}"; // Show .exe first, then all files
-            std::string startingPath = "."; 
-            // Directly open dialog
-            ImGuiFileDialog::Instance()->OpenDialog(key, title, filters, {
-                .path = startingPath,
-                .fileName = "",
-                .filePathName = "",
-                .countSelectionMax = 1,
-                .userDatas = (void*)"AddEditActionParam", // Use unified user data id
-                .flags = ImGuiFileDialogFlags_Modal |
-                         ImGuiFileDialogFlags_DisableThumbnailMode | 
-                         ImGuiFileDialogFlags_DisablePlaceMode | 
-                         ImGuiFileDialogFlags_HideColumnType | 
-                         ImGuiFileDialogFlags_HideColumnSize | 
-                         ImGuiFileDialogFlags_HideColumnDate | 
-                         ImGuiFileDialogFlags_DisableCreateDirectoryButton
-            });
+        // --- Row 1: Button ID ---
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted(m_translator.get("button_id_label").c_str());
+        
+        ImGui::TableSetColumnIndex(1);
+        float helpIconWidth = ImGui::CalcTextSize("(?)").x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+        float idInputWidth = ImGui::GetContentRegionAvail().x - helpIconWidth - (isEditing ? ImGui::CalcTextSize("(Cannot be changed)").x + ImGui::GetStyle().ItemSpacing.x : 0.0f);
+        ImGui::PushItemWidth(idInputWidth > 0 ? idInputWidth : -FLT_MIN); 
+        ImGuiInputTextFlags idFlags = isEditing ? ImGuiInputTextFlags_ReadOnly : ImGuiInputTextFlags_None;
+        ImGui::InputText("##ButtonID", m_newButtonId, IM_ARRAYSIZE(m_newButtonId), idFlags);
+        ImGui::PopItemWidth();
+        ImGui::SameLine(); ImGui::TextDisabled("(?)");
+        if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("button_id_tooltip").c_str()); }
+        if (isEditing) {
+            ImGui::SameLine(); ImGui::TextDisabled("(Cannot be changed)");
         }
-         ImGui::SameLine(); // Keep tooltip marker on the same line
-    }
-    ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)) { 
-        ImGui::SetTooltip("%s", m_translator.get("action_param_tooltip").c_str());
+
+        // --- Row 2: Button Name ---
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted(m_translator.get("button_name_label").c_str());
+
+        ImGui::TableSetColumnIndex(1);
+        float nameInputWidth = ImGui::GetContentRegionAvail().x - helpIconWidth;
+        ImGui::PushItemWidth(nameInputWidth > 0 ? nameInputWidth : -FLT_MIN);
+        ImGui::InputText("##ButtonName", m_newButtonName, IM_ARRAYSIZE(m_newButtonName));
+        ImGui::PopItemWidth();
+        ImGui::SameLine(); ImGui::TextDisabled("(?)");
+        if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("button_name_tooltip").c_str()); }
+
+        // --- Row 3: Action Type ---
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted(m_translator.get("action_type_label").c_str());
+
+        ImGui::TableSetColumnIndex(1);
+        float comboWidth = ImGui::GetContentRegionAvail().x - helpIconWidth;
+        ImGui::PushItemWidth(comboWidth > 0 ? comboWidth : -FLT_MIN);
+        std::vector<const char*> actionTypeDisplayItems;
+        for(const auto& type : m_supportedActionTypes) {
+            std::string translationKey = "action_type_" + type + "_display";
+            actionTypeDisplayItems.push_back(m_translator.get(translationKey).c_str());
+        }
+        ImGui::Combo("##ActionTypeCombo", &m_newButtonActionTypeIndex, actionTypeDisplayItems.data(), actionTypeDisplayItems.size());
+        ImGui::PopItemWidth();
+        ImGui::SameLine(); ImGui::TextDisabled("(?)");
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)) {
+            ImGui::SetTooltip("%s", m_translator.get("action_type_tooltip").c_str());
+        }
+
+        // --- Row 4: Action Param ---
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted(m_translator.get("action_param_label").c_str());
+
+        ImGui::TableSetColumnIndex(1);
+        // Logic for Action Param rendering within the second column
+        std::string currentActionTypeStr = (m_newButtonActionTypeIndex >= 0 && m_newButtonActionTypeIndex < m_supportedActionTypes.size())
+                                               ? m_supportedActionTypes[m_newButtonActionTypeIndex]
+                                               : "";
+        bool isHotkeyAction = (currentActionTypeStr == "hotkey");
+        bool isLaunchAppAction = (currentActionTypeStr == "launch_app");
+
+        if (isHotkeyAction)
+        {
+            // Hotkey specific input logic with manual toggle
+            ImGui::Checkbox("##ManualHotkeyCheckbox", &m_manualHotkeyEntry); // Checkbox first
+             ImGui::SameLine(); ImGui::TextUnformatted(m_translator.get("hotkey_manual_input_checkbox").c_str()); // Checkbox label
+             if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("hotkey_manual_input_tooltip").c_str()); }
+             ImGui::NewLine(); // Move input to next line within the cell
+
+            float hotkeyWidth = ImGui::GetContentRegionAvail().x - helpIconWidth;
+            ImGui::PushItemWidth(hotkeyWidth > 0 ? hotkeyWidth : -FLT_MIN); // Input takes calculated width
+            if (m_manualHotkeyEntry)
+            {
+                m_isCapturingHotkey = false; // Ensure capture mode is off
+                ImGui::InputText("##ActionParamInputManual", m_newButtonActionParam, sizeof(m_newButtonActionParam));
+            }
+            else
+            {
+                if (m_isCapturingHotkey)
+                {
+                    char capturePlaceholder[256];
+                    const char* promptFormat = m_translator.get("hotkey_capture_prompt").c_str();
+                    snprintf(capturePlaceholder, sizeof(capturePlaceholder), promptFormat, m_newButtonActionParam);
+                    ImGui::InputText("##ActionParamInputCapturing", capturePlaceholder, sizeof(capturePlaceholder), ImGuiInputTextFlags_ReadOnly);
+                    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("hotkey_capture_tooltip_capturing").c_str()); }
+                    if (InputUtils::TryCaptureHotkey(m_newButtonActionParam, sizeof(m_newButtonActionParam))) {
+                        m_isCapturingHotkey = false; // Exit capture mode
+                    }
+                     if (!ImGui::IsItemActive() && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
+                         ImGui::SetKeyboardFocusHere(-1);
+                     }
+                }
+                else
+                {
+                    ImGui::InputText("##ActionParamInput", m_newButtonActionParam, sizeof(m_newButtonActionParam));
+                    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("hotkey_capture_tooltip_start").c_str()); }
+                    if (ImGui::IsItemClicked()) { m_isCapturingHotkey = true; }
+                }
+            }
+            ImGui::PopItemWidth();
+            ImGui::SameLine(); ImGui::TextDisabled("(?)"); // Help icon next to input
+            if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("action_param_tooltip").c_str()); }
+        }
+        else
+        {
+            // --- Standard Input for other action types ---
+            m_isCapturingHotkey = false; // Ensure capture mode is off if not hotkey type
+            float browseButtonWidth = ImGui::CalcTextSize(m_translator.get("browse_button_label").c_str()).x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
+            float standardInputWidth = ImGui::GetContentRegionAvail().x - helpIconWidth - (isLaunchAppAction ? browseButtonWidth : 0.0f);
+            ImGui::PushItemWidth(standardInputWidth > 0 ? standardInputWidth : -FLT_MIN);
+            ImGui::InputText("##ActionParamInput", m_newButtonActionParam, sizeof(m_newButtonActionParam));
+            ImGui::PopItemWidth();
+            ImGui::SameLine(); ImGui::TextDisabled("(?)"); // Help icon next to input
+            if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("action_param_tooltip").c_str()); }
+
+            if (isLaunchAppAction) {
+                ImGui::SameLine();
+                if (ImGui::Button(m_translator.get("browse_button_label").c_str()))
+                {
+                    const char* key = m_editingButtonId.empty() ? "SelectAppDlgKey_Add" : "SelectAppDlgKey_Edit";
+                    const char* title = m_translator.get("select_app_dialog_title").c_str();
+                    const char* filters = ".exe{,.*}";
+                    IGFD::FileDialogConfig config; config.path = ".";
+                    ImGuiFileDialog::Instance()->OpenDialog(key, title, filters, config);
+                }
+            }
+        }
+        // If action type changes away from hotkey, ensure capture mode is off
+        if (m_isCapturingHotkey && !isHotkeyAction) { m_isCapturingHotkey = false; }
+
+        // --- Row 5: Icon Path ---
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted(m_translator.get("button_icon_label").c_str());
+
+        ImGui::TableSetColumnIndex(1);
+        float iconBrowseButtonWidth = ImGui::CalcTextSize("...").x + ImGui::GetStyle().ItemSpacing.x * 2.0f; // Width for "..."
+        float iconInputWidth = ImGui::GetContentRegionAvail().x - helpIconWidth - iconBrowseButtonWidth;
+        ImGui::PushItemWidth(iconInputWidth > 0 ? iconInputWidth : -FLT_MIN);
+        ImGui::InputText("##IconPath", m_newButtonIconPath, IM_ARRAYSIZE(m_newButtonIconPath));
+        ImGui::PopItemWidth();
+        ImGui::SameLine();
+        if (ImGui::Button("...##IconBrowse")) { // Shortened label for browse
+             const char* key = "SelectIconDlgKey_AddEdit";
+             const char* title = "Select Button Icon";
+             const char* filters = ".*"; // Common image filters
+             IGFD::FileDialogConfig config; config.path = ".";
+             config.userDatas = (void*)"AddEditIconPath";
+             ImGuiFileDialog::Instance()->OpenDialog(key, title, filters, config);
+        }
+        ImGui::SameLine(); ImGui::TextDisabled("(?)");
+        if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("button_icon_tooltip").c_str()); }
+
+        // --- END TABLE LAYOUT ---
+        ImGui::EndTable();
     }
 
-    // Icon Path Input (Add New)
-    ImGui::InputText(m_translator.get("button_icon_label").c_str(), m_newButtonIconPath, IM_ARRAYSIZE(m_newButtonIconPath)); 
-    ImGui::SameLine();
-    // --- RESTORED: Direct Dialog Open ---
-    if (ImGui::Button("...##AddIconBrowse")) { 
-        const char* key = "SelectIconDlgKey_AddEdit"; // Use one key
-        const char* title = "Select Button Icon";
-        const char* filters = ".*"; // Show all files by default
-        std::string startingPath = "."; // Maybe start in assets?
-        // Directly open dialog
-        ImGuiFileDialog::Instance()->OpenDialog(key, title, filters, {
-            .path = startingPath,
-            .countSelectionMax = 1,
-            .userDatas = (void*)"AddEditIconPath", // Use unified user data id
-            .flags = ImGuiFileDialogFlags_Modal |
-                     ImGuiFileDialogFlags_DisableThumbnailMode |
-                     ImGuiFileDialogFlags_DisablePlaceMode |
-                     ImGuiFileDialogFlags_HideColumnType |
-                     ImGuiFileDialogFlags_HideColumnSize |
-                     ImGuiFileDialogFlags_HideColumnDate |
-                     ImGuiFileDialogFlags_DisableCreateDirectoryButton
-        });
-    }
-    ImGui::SameLine(); ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)) {
-        ImGui::SetTooltip("%s", m_translator.get("button_icon_tooltip").c_str());
-    }
-
-    // --- MODIFIED: Submit Button (Add/Save) ---
+    // --- Buttons after the table ---
     const char* submitLabel = isEditing ? m_translator.get("save_changes_button_label").c_str() : m_translator.get("add_button_label").c_str();
     if (ImGui::Button(submitLabel)) {
         ButtonConfig buttonData;
