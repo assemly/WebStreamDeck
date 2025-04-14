@@ -1,4 +1,6 @@
 #include "ActionExecutor.hpp"
+#include "ConfigManager.hpp"
+#include "InputUtils.hpp" // Needed for SimulateMediaKeyPress and TryCaptureHotkey
 #include <iostream> // For error reporting
 #include <optional>
 #include <string> // Needed for wstring conversion
@@ -6,6 +8,7 @@
 #include <algorithm> // For std::transform
 #include <sstream>   // For splitting string
 #include <map>       // For key mapping
+#include <mutex>     // For thread safety
 
 // Platform specific includes for actions
 #ifdef _WIN32
@@ -116,221 +119,224 @@ ActionExecutor::ActionExecutor(ConfigManager& configManager)
 {
 }
 
-bool ActionExecutor::executeAction(const std::string& buttonId)
+// Called from WebSocket thread (or any thread)
+void ActionExecutor::requestAction(const std::string& buttonId)
 {
-    std::optional<ButtonConfig> buttonOpt = m_configManager.getButtonById(buttonId);
-    if (!buttonOpt) {
-        std::cerr << "Error: Could not find button configuration for ID: " << buttonId << std::endl;
-        return false;
-    }
-
-    const ButtonConfig& button = *buttonOpt;
-    std::cout << "Executing action for button '" << button.name << "' (ID: " << button.id << ")" << std::endl;
-    std::cout << "  Type: " << button.action_type << ", Param: " << button.action_param << std::endl;
-
-    if (button.action_type == "launch_app") {
-        return executeLaunchApp(button.action_param);
-    } else if (button.action_type == "open_url") {
-        return executeOpenUrl(button.action_param);
-    } else if (button.action_type == "hotkey") {
-        #ifdef _WIN32
-            return executeHotkey(button.action_param);
-        #else
-            std::cerr << "Error: Hotkey action is currently only supported on Windows." << std::endl;
-            return false;
-        #endif
-    } else {
-        std::cerr << "Error: Unknown action type: " << button.action_type << std::endl;
-        return false;
-    }
+    std::lock_guard<std::mutex> lock(m_queueMutex);
+    m_actionQueue.push(buttonId);
+    std::cout << "Queued action request for button ID: " << buttonId << std::endl;
 }
 
-// --- ADDED: executeHotkey Implementation ---
-#ifdef _WIN32
-bool ActionExecutor::executeHotkey(const std::string& keys)
+// Called from the main thread in the main loop
+void ActionExecutor::processPendingActions()
 {
-    std::vector<WORD> modifierCodes;
-    WORD mainKeyCode = 0;
+    std::string buttonIdToProcess;
+    bool actionFound = false;
 
-    // Parse the keys string (e.g., "CTRL+ALT+T")
-    std::stringstream ss(keys);
-    std::string segment;
-    while (std::getline(ss, segment, '+')) {
-        // Trim whitespace 
-        segment.erase(0, segment.find_first_not_of(" \t\r\n"));
-        segment.erase(segment.find_last_not_of(" \t\r\n") + 1);
-
-        if (segment.empty()) continue;
-
-        WORD vk = StringToVkCode(segment);
-        if (vk == 0) {
-             std::cerr << "Error: Invalid key name '" << segment << "' in hotkey string: " << keys << std::endl;
-            return false; // Failed to parse
-        }
-
-        // Check if it's a modifier key
-        if (vk == VK_CONTROL || vk == VK_MENU || vk == VK_SHIFT || vk == VK_LWIN || vk == VK_RWIN) {
-            // Avoid duplicate modifiers
-            bool found = false;
-            for(WORD mod : modifierCodes) { if (mod == vk) { found = true; break; } }
-            if (!found) modifierCodes.push_back(vk);
-        } else {
-            if (mainKeyCode != 0) {
-                std::cerr << "Error: Multiple non-modifier keys specified in hotkey string: " << keys << " ('" << segment << "' conflicts)" << std::endl;
-                return false; // Only one main key allowed
-            }
-            mainKeyCode = vk;
-        }
-    }
-
-    if (mainKeyCode == 0) {
-        std::cerr << "Error: No main key specified in hotkey string: " << keys << std::endl;
-        return false; // Must have a main key
-    }
-
-    // Prepare INPUT structures
-    size_t numInputs = (modifierCodes.size() + 1) * 2;
-    std::vector<INPUT> inputs(numInputs);
-    ZeroMemory(inputs.data(), sizeof(INPUT) * numInputs);
-
-    size_t inputIndex = 0;
-
-    // Press Modifiers
-    for (WORD modCode : modifierCodes) {
-        inputs[inputIndex].type = INPUT_KEYBOARD;
-        inputs[inputIndex].ki.wVk = modCode;
-        // inputs[inputIndex].ki.dwFlags = 0; // Key down (default)
-        inputIndex++;
-    }
-
-    // Press Main Key
-    inputs[inputIndex].type = INPUT_KEYBOARD;
-    inputs[inputIndex].ki.wVk = mainKeyCode;
-    // inputs[inputIndex].ki.dwFlags = 0; // Key down (default)
-    inputIndex++;
-
-    // Release Main Key
-    inputs[inputIndex].type = INPUT_KEYBOARD;
-    inputs[inputIndex].ki.wVk = mainKeyCode;
-    inputs[inputIndex].ki.dwFlags = KEYEVENTF_KEYUP; // Key up
-    inputIndex++;
-
-    // Release Modifiers (in reverse order)
-    for (auto it = modifierCodes.rbegin(); it != modifierCodes.rend(); ++it) {
-        inputs[inputIndex].type = INPUT_KEYBOARD;
-        inputs[inputIndex].ki.wVk = *it;
-        inputs[inputIndex].ki.dwFlags = KEYEVENTF_KEYUP; // Key up
-        inputIndex++;
-    }
-
-    // Send the inputs
-    UINT sent = SendInput(static_cast<UINT>(numInputs), inputs.data(), sizeof(INPUT));
-    if (sent != numInputs) {
-        std::cerr << "Error: SendInput failed to send all key events. Error code: " << GetLastError() << std::endl;
-        // Attempt to release keys that might be stuck (best effort)
-        for(size_t i = 0; i < numInputs / 2; ++i) {
-            inputs[i].ki.dwFlags = KEYEVENTF_KEYUP;
-            SendInput(1, &inputs[i], sizeof(INPUT));
-        }
-        return false;
-    }
-
-    std::cout << "Executed hotkey: " << keys << std::endl;
-    return true;
-}
-#endif // _WIN32
-
-// --- Private Helper Implementations ---
-
-bool ActionExecutor::executeLaunchApp(const std::string& path)
-{
-#ifdef _WIN32
-    // Use ShellExecuteEx for better error handling and options if needed
-    // HINSTANCE result = ShellExecute(NULL, "open", path.c_str(), NULL, NULL, SW_SHOWNORMAL);
-    // For simplicity, using CreateProcess which is often more robust for launching apps
-    
-    STARTUPINFOW si; // Explicitly use STARTUPINFOW
-    PROCESS_INFORMATION pi;
-    ZeroMemory(&si, sizeof(si));
-    si.cb = sizeof(si);
-    ZeroMemory(&pi, sizeof(pi));
-
-    // Convert path to wstring for Windows API
-    std::wstring wPath = StringToWstring(path);
-    if (wPath.empty() && !path.empty()) { // Handle potential conversion failure
-        std::cerr << "Error: Failed to convert path to wstring: " << path << std::endl;
-        return false;
-    }
-
-    // CreateProcess requires a non-const pointer for lpCommandLine, work with a copy
-    std::vector<wchar_t> commandLineVec(wPath.begin(), wPath.end());
-    commandLineVec.push_back(0); // Null-terminate
-
-    if (!CreateProcessW(NULL,   // Use CreateProcessW explicitly
-                       commandLineVec.data(), // Command line (mutable wchar_t*)
-                       NULL,   
-                       NULL,   
-                       FALSE,  
-                       CREATE_NEW_CONSOLE, 
-                       NULL,   
-                       NULL,    
-                       &si,    
-                       &pi)    
-    )
+    // Check queue quickly while locked
     {
-        DWORD errorCode = GetLastError();
-        std::cerr << "Error: Failed to launch application '" << path << "'. CreateProcess failed with error code: " << errorCode << std::endl;
-        // You might want to convert errorCode to a human-readable message using FormatMessage
-        return false;
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        if (!m_actionQueue.empty()) {
+            buttonIdToProcess = m_actionQueue.front();
+            m_actionQueue.pop();
+            actionFound = true;
+        }
     }
-    std::cout << "Launched application: " << path << std::endl;
-    // Close process and thread handles immediately as we don't need them
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
-    return true;
-#else
-    // Basic implementation for Linux/macOS using system()
-    // WARNING: system() is generally discouraged due to security risks.
-    // Use fork()/exec() or posix_spawn() in real applications.
-    std::string command = path + " &"; // Run in background
-    int result = std::system(command.c_str());
-    if (result != 0) {
-         std::cerr << "Error: Failed to launch application '" << path << "'. system() returned: " << result << std::endl;
-         return false;
+
+    // Execute action outside the lock
+    if (actionFound) {
+        executeActionInternal(buttonIdToProcess);
     }
-     std::cout << "Launched application: " << path << std::endl;
-    return true;
-#endif
 }
 
-bool ActionExecutor::executeOpenUrl(const std::string& url)
+// Renamed: Contains the original execution logic, called only from main thread
+void ActionExecutor::executeActionInternal(const std::string& buttonId)
 {
-#ifdef _WIN32
-    std::wstring wUrl = StringToWstring(url);
-     if (wUrl.empty() && !url.empty()) {
-        std::cerr << "Error: Failed to convert URL to wstring: " << url << std::endl;
-        return false;
+    auto buttonConfigOpt = m_configManager.getButtonById(buttonId);
+    if (!buttonConfigOpt) {
+        std::cerr << "Error executing action: Button with ID '" << buttonId << "' not found." << std::endl;
+        return;
     }
 
-    HINSTANCE result = ShellExecuteW(NULL, L"open", wUrl.c_str(), NULL, NULL, SW_SHOWNORMAL); // Use ShellExecuteW and L"open"
-    // ShellExecute returns > 32 on success
-    if ((intptr_t)result <= 32) {
-        std::cerr << "Error: Failed to open URL '" << url << "'. ShellExecute error code: " << (intptr_t)result << std::endl;
-        return false;
-    }
-    std::cout << "Opened URL: " << url << std::endl;
-    return true;
+    const ButtonConfig& config = *buttonConfigOpt;
+    const std::string& actionType = config.action_type;
+    const std::string& actionParam = config.action_param;
+
+    std::cout << "Executing action for button '" << buttonId 
+              << "' (on main thread): Type='" << actionType 
+              << "', Param='" << actionParam << "'" << std::endl;
+
+    // --- Action Logic (remains largely the same, but now runs on main thread) ---
+    if (actionType == "launch_app") {
+        // Using ShellExecute for more flexibility (e.g., opening documents)
+        HINSTANCE result = ShellExecuteA(NULL, "open", actionParam.c_str(), NULL, NULL, SW_SHOWNORMAL);
+        if ((intptr_t)result <= 32) { // ShellExecute returns value > 32 on success
+            std::cerr << "Error executing launch_app: Failed to launch '" << actionParam << "' (Error code: " << (intptr_t)result << ")" << std::endl;
+        }
+    } else if (actionType == "open_url") {
+        HINSTANCE result = ShellExecuteA(NULL, "open", actionParam.c_str(), NULL, NULL, SW_SHOWNORMAL);
+        if ((intptr_t)result <= 32) {
+             std::cerr << "Error executing open_url: Failed to open '" << actionParam << "' (Error code: " << (intptr_t)result << ")" << std::endl;
+        }
+    } else if (actionType == "hotkey") {
+        // --- ADDED: Hotkey Simulation Logic ---
+#ifdef _WIN32
+        std::vector<WORD> modifierCodes;
+        WORD mainKeyCode = 0;
+
+        // Parse the keys string (e.g., "CTRL+ALT+T", "SHIFT+[")
+        std::stringstream ss(actionParam);
+        std::string segment;
+        while (std::getline(ss, segment, '+')) {
+            // Trim whitespace 
+            segment.erase(0, segment.find_first_not_of(" \t\r\n"));
+            segment.erase(segment.find_last_not_of(" \t\r\n") + 1);
+
+            if (segment.empty()) continue;
+
+            WORD vk = StringToVkCode(segment);
+            if (vk == 0) {
+                 std::cerr << "Error: Invalid key name '" << segment << "' in hotkey string: " << actionParam << std::endl;
+                 return; // Stop processing this action
+            }
+
+            // Check if it's a modifier key
+            if (vk == VK_CONTROL || vk == VK_MENU || vk == VK_SHIFT || vk == VK_LWIN || vk == VK_RWIN) {
+                // Add modifier (use generic VK codes for simplicity in SendInput)
+                WORD generic_vk = vk;
+                if(vk == VK_LWIN || vk == VK_RWIN) generic_vk = VK_LWIN; // Treat both as LWIN for press/release
+                // Avoid duplicate generic modifiers
+                bool found = false;
+                for(WORD mod : modifierCodes) { if (mod == generic_vk) { found = true; break; } }
+                if (!found) modifierCodes.push_back(generic_vk);
+            } else {
+                if (mainKeyCode != 0) {
+                    std::cerr << "Error: Multiple non-modifier keys specified in hotkey string: " << actionParam << std::endl;
+                    return; // Only one main key allowed
+                }
+                mainKeyCode = vk;
+            }
+        }
+
+        if (mainKeyCode == 0) {
+            std::cerr << "Error: No main key specified in hotkey string: " << actionParam << std::endl;
+            return; // Must have a main key
+        }
+
+        // Prepare INPUT structures (Max 4 modifiers + 1 main key = 5 pairs)
+        const size_t MAX_INPUTS = 10; // 5 down, 5 up
+        std::vector<INPUT> inputs(MAX_INPUTS);
+        ZeroMemory(inputs.data(), sizeof(INPUT) * MAX_INPUTS);
+        size_t inputIndex = 0;
+
+        // Press Modifiers
+        for (WORD modCode : modifierCodes) {
+            if(inputIndex >= MAX_INPUTS) break; // Bounds check
+            inputs[inputIndex].type = INPUT_KEYBOARD;
+            inputs[inputIndex].ki.wVk = modCode;
+            inputIndex++;
+        }
+
+        // Press Main Key
+        if(inputIndex >= MAX_INPUTS) return; // Bounds check
+        inputs[inputIndex].type = INPUT_KEYBOARD;
+        inputs[inputIndex].ki.wVk = mainKeyCode;
+        inputIndex++;
+
+        // Release Main Key
+        if(inputIndex >= MAX_INPUTS) return; // Bounds check
+        inputs[inputIndex].type = INPUT_KEYBOARD;
+        inputs[inputIndex].ki.wVk = mainKeyCode;
+        inputs[inputIndex].ki.dwFlags = KEYEVENTF_KEYUP;
+        inputIndex++;
+
+        // Release Modifiers (in reverse order)
+        for (auto it = modifierCodes.rbegin(); it != modifierCodes.rend(); ++it) {
+             if(inputIndex >= MAX_INPUTS) break; // Bounds check
+            inputs[inputIndex].type = INPUT_KEYBOARD;
+            inputs[inputIndex].ki.wVk = *it;
+            inputs[inputIndex].ki.dwFlags = KEYEVENTF_KEYUP;
+            inputIndex++;
+        }
+
+        // Send the inputs
+        if (inputIndex > 0) {
+             UINT sent = SendInput(static_cast<UINT>(inputIndex), inputs.data(), sizeof(INPUT));
+             if (sent != inputIndex) {
+                 std::cerr << "Error: SendInput failed to send all key events for hotkey '" << actionParam << "'. Error code: " << GetLastError() << std::endl;
+                 // Attempt to release keys that might be stuck (best effort)
+                 for(size_t i = 0; i < inputIndex; ++i) {
+                     if (inputs[i].ki.dwFlags == 0) { // If it was a key down
+                         inputs[i].ki.dwFlags = KEYEVENTF_KEYUP;
+                         SendInput(1, &inputs[i], sizeof(INPUT));
+                     }
+                 }
+             } else {
+                 std::cout << "Executed hotkey: " << actionParam << std::endl;
+             }
+        } else {
+             std::cerr << "Error: No valid inputs generated for hotkey: " << actionParam << std::endl;
+        }
 #else
-    // Basic implementation for Linux/macOS
-    std::string command = "xdg-open "; // Linux
-    // Add macOS equivalent: command = "open ";
-    command += "\"" + url + "\""; // Quote URL
-    int result = std::system(command.c_str());
-     if (result != 0) {
-         std::cerr << "Error: Failed to open URL '" << url << "'. system() returned: " << result << std::endl;
-         return false;
-    }
-    std::cout << "Opened URL: " << url << std::endl;
-    return true;
+        std::cerr << "Error: Hotkey action is currently only supported on Windows." << std::endl;
 #endif
-} 
+        // --- END Hotkey Simulation Logic ---
+    } 
+    // --- Handle Media Key Actions (Now running on main thread) ---
+    else if (actionType == "media_volume_up") {
+        std::cout << "Executing: Media Volume Up (Core Audio) x2" << std::endl;
+        // Call the function twice
+        bool success1 = InputUtils::IncreaseMasterVolume();
+        bool success2 = InputUtils::IncreaseMasterVolume(); 
+        if (!success1 || !success2) { // Log if either call failed
+             std::cerr << "Failed to increase volume (at least one step failed)." << std::endl;
+        }
+    }
+    else if (actionType == "media_volume_down") {
+        // Keep volume down as single step unless requested otherwise
+        std::cout << "Executing: Media Volume Down (Core Audio)" << std::endl;
+        if (!InputUtils::DecreaseMasterVolume()) {
+             std::cerr << "Failed to decrease volume." << std::endl;
+        }
+    }
+    else if (actionType == "media_mute") {
+        std::cout << "Executing: Media Mute Toggle (Core Audio)" << std::endl;
+        if (!InputUtils::ToggleMasterMute()) {
+             std::cerr << "Failed to toggle mute." << std::endl;
+        }
+    }
+    // --- Media keys using SimulateKeyPress (should be safe on main thread too) ---
+    else if (actionType == "media_play_pause") {
+        std::cout << "Executing: Media Play/Pause (Simulate Key)" << std::endl;
+        InputUtils::SimulateMediaKeyPress(VK_MEDIA_PLAY_PAUSE);
+    }
+    else if (actionType == "media_next_track") {
+        std::cout << "Executing: Media Next Track (Simulate Key)" << std::endl;
+        InputUtils::SimulateMediaKeyPress(VK_MEDIA_NEXT_TRACK);
+    }
+    else if (actionType == "media_prev_track") {
+        std::cout << "Executing: Media Previous Track (Simulate Key)" << std::endl;
+        InputUtils::SimulateMediaKeyPress(VK_MEDIA_PREV_TRACK);
+    }
+    else if (actionType == "media_stop") {
+        std::cout << "Executing: Media Stop (Simulate Key)" << std::endl;
+        InputUtils::SimulateMediaKeyPress(VK_MEDIA_STOP);
+    }
+    // --- END of Media Key Actions ---
+    else {
+        std::cerr << "Error: Unknown action type '" << actionType << "' for button ID '" << buttonId << "'" << std::endl;
+    }
+}
+
+// --- executeHotkey Implementation (if exists) should also be called from Internal ---
+#ifdef _WIN32
+// bool ActionExecutor::executeHotkey(const std::string& keys)
+// { ... implementation ... }
+#endif
+
+// --- Private Helper Implementations --- 
+// bool ActionExecutor::executeLaunchApp(const std::string& path)
+// { ... implementation ... }
+
+// bool ActionExecutor::executeOpenUrl(const std::string& url)
+// { ... implementation ... } 

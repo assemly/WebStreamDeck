@@ -11,7 +11,7 @@
     "button_id_tooltip": "按钮的唯一标识符（例如 'btn_app_xyz'）。以后不能更改。",
     "button_name_tooltip": "显示在网页界面和按钮网格上的文本。",
     "action_type_tooltip": "要执行的动作类型（例如 '启动应用', '打开网站', '热键'）。",
-    "action_param_tooltip": "动作类型的参数：\n- 启动应用: 可执行文件的完整路径 (例如 C:\\Windows\\notepad.exe)\n- 打开网站: 要打开的 URL (例如 https://www.google.com)\n- 热键: 组合键 (例如 CTRL+ALT+T, SHIFT+F5, WIN+D)。使用 + 组合按键。",
+    "action_param_tooltip": "动作类型的参数：\n- 启动应用: 可执行文件的完整路径\n- 打开网站: 要打开的 URL\n- 热键: 组合键 (例如 CTRL+ALT+T)\n- 媒体键: 无需参数。",
     "add_button_label": "添加按钮",
     "edit_button_label": "编辑",
     "delete_button_label": "删除",
@@ -62,5 +62,12 @@
     "hotkey_manual_input_checkbox": "手动输入",
     "hotkey_manual_input_tooltip": "勾选此框以手动输入热键字符串 (例如 CTRL+ALT+T)。取消勾选以启用点击捕捉模式。",
     "browse_button_label": "浏览...",
-    "select_app_dialog_title": "选择应用程序文件"
+    "select_app_dialog_title": "选择应用程序文件",
+    "action_type_media_volume_up_display": "媒体：音量增大",
+    "action_type_media_volume_down_display": "媒体：音量减小",
+    "action_type_media_mute_display": "媒体：静音",
+    "action_type_media_play_pause_display": "媒体：播放/暂停",
+    "action_type_media_next_track_display": "媒体：下一曲",
+    "action_type_media_prev_track_display": "媒体：上一曲",
+    "action_type_media_stop_display": "媒体：停止"
 }

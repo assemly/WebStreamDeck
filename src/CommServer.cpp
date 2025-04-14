@@ -166,6 +166,8 @@ void CommServer::configure_app(int port) {
                 if (m_message_handler) {
                     try {
                         json payload_json = json::parse(message);
+                        // Pass the ActionExecutor reference to the handler if needed
+                        // Or, preferably, the handler captures it if defined as lambda in main.
                         m_message_handler(ws, payload_json, false);
                     }
                     catch (const json::parse_error& e) {

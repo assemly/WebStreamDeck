@@ -1,8 +1,12 @@
 #include "InputUtils.hpp"
+#include <windows.h> // Include for SendInput and virtual key codes
 #include <vector>
 #include <string>
 #include <algorithm> // For std::sort
 #include <imgui_internal.h> // May be needed for specific ImGuiKey details or IsKeyDownMap
+#include <set>
+#include <chrono> // For timing ESC debounce
+#include <iostream> // For cerr
 
 namespace InputUtils {
 
@@ -80,6 +84,11 @@ std::string ImGuiKeyToString(ImGuiKey key) {
     }
 }
 
+static std::set<int> g_pressedKeys;
+static char g_hotkeyBuffer[HOTKEY_BUFFER_SIZE] = {0};
+static bool g_capturing = false;
+static std::chrono::steady_clock::time_point g_lastEscPressTime; // Added for ESC debounce
+const std::chrono::milliseconds ESC_DEBOUNCE_DURATION(200); // Debounce ESC for 200ms
 
 bool TryCaptureHotkey(char* buffer, size_t buffer_size) {
     if (!buffer || buffer_size == 0) {
@@ -162,5 +171,163 @@ bool TryCaptureHotkey(char* buffer, size_t buffer_size) {
     return false; // Still capturing
 }
 
+// Helper to map VK codes to names (simplified)
+// ... (existing VkCodeToString may need updates if new keys are added)
+const char* VkCodeToString(int vk_code) { 
+    // ... (Keep existing mappings) ...
+    // Add more mappings if needed for display
+    return "Unknown";
+}
+
+// Hook procedure (modified slightly for clarity and potential improvements)
+// ... (existing LowLevelKeyboardProc can remain largely the same) ...
+
+// --- ADDED: Implementation for simulating media key presses ---
+void SimulateMediaKeyPress(WORD vkCode) {
+    INPUT inputs[2] = {};
+
+    // Press the key
+    inputs[0].type = INPUT_KEYBOARD;
+    inputs[0].ki.wVk = vkCode;
+    // inputs[0].ki.dwFlags = 0; // 0 for key press
+
+    // Release the key
+    inputs[1].type = INPUT_KEYBOARD;
+    inputs[1].ki.wVk = vkCode;
+    inputs[1].ki.dwFlags = KEYEVENTF_KEYUP; // Flag for key release
+
+    // Send the inputs
+    UINT uSent = SendInput(ARRAYSIZE(inputs), inputs, sizeof(INPUT));
+    if (uSent != ARRAYSIZE(inputs)) {
+        // Handle error if needed (e.g., log a warning)
+        // std::cerr << "SendInput failed to send all key events: " << GetLastError() << std::endl;
+    }
+}
+
+// --- ADDED: Core Audio API Implementation ---
+#ifdef _WIN32
+// Global pointers for the audio interfaces (simple approach)
+IMMDeviceEnumerator *pEnumerator = NULL;
+IAudioEndpointVolume *pEndpointVolume = NULL;
+
+// Helper Macro for safe COM release
+#define SAFE_RELEASE(punk)  \
+              if ((punk) != NULL)  \
+                { (punk)->Release(); (punk) = NULL; }
+
+bool InitializeAudioControl() {
+    HRESULT hr;
+    bool success = false;
+
+    // Initialize COM for this thread
+    hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) { // RPC_E_CHANGED_MODE means COM already initialized differently, which is ok
+        std::cerr << "Error: CoInitializeEx failed, HR = 0x" << std::hex << hr << std::endl;
+        return false;
+    }
+
+    // Get the device enumerator
+    hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), NULL, CLSCTX_ALL,
+                          __uuidof(IMMDeviceEnumerator), (void**)&pEnumerator);
+    if (FAILED(hr)) {
+        std::cerr << "Error: CoCreateInstance(MMDeviceEnumerator) failed, HR = 0x" << std::hex << hr << std::endl;
+        CoUninitialize(); // Clean up COM
+        return false;
+    }
+
+    // Get the default audio endpoint device
+    IMMDevice *pDevice = NULL;
+    hr = pEnumerator->GetDefaultAudioEndpoint(eRender, eConsole, &pDevice);
+    if (FAILED(hr)) {
+        std::cerr << "Error: GetDefaultAudioEndpoint failed, HR = 0x" << std::hex << hr << std::endl;
+        SAFE_RELEASE(pEnumerator);
+        CoUninitialize();
+        return false;
+    }
+
+    // Activate the IAudioEndpointVolume interface
+    hr = pDevice->Activate(__uuidof(IAudioEndpointVolume), CLSCTX_ALL, NULL, (void**)&pEndpointVolume);
+    if (FAILED(hr)) {
+        std::cerr << "Error: Activate(IAudioEndpointVolume) failed, HR = 0x" << std::hex << hr << std::endl;
+    }
+    else {
+        success = true; // Successfully got the volume interface
+    }
+
+    SAFE_RELEASE(pDevice); // Release the device, we have the volume interface now
+
+    // If activation failed, release enumerator and uninitialize COM
+    if (!success) {
+        SAFE_RELEASE(pEnumerator);
+        CoUninitialize();
+    }
+
+    std::cout << "Audio control initialized " << (success ? "successfully." : "failed.") << std::endl;
+    return success;
+}
+
+void UninitializeAudioControl() {
+    SAFE_RELEASE(pEndpointVolume);
+    SAFE_RELEASE(pEnumerator);
+    CoUninitialize(); // Uninitialize COM
+    std::cout << "Audio control uninitialized." << std::endl;
+}
+
+bool IncreaseMasterVolume() {
+    if (!pEndpointVolume) {
+        std::cerr << "Error: Audio volume control not initialized." << std::endl;
+        return false;
+    }
+    HRESULT hr = pEndpointVolume->VolumeStepUp(NULL);
+    if (FAILED(hr)) {
+        _com_error err(hr);
+        std::wcerr << L"Error: VolumeStepUp failed: " << err.ErrorMessage() << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool DecreaseMasterVolume() {
+    if (!pEndpointVolume) {
+        std::cerr << "Error: Audio volume control not initialized." << std::endl;
+        return false;
+    }
+    HRESULT hr = pEndpointVolume->VolumeStepDown(NULL);
+     if (FAILED(hr)) {
+        _com_error err(hr);
+        std::wcerr << L"Error: VolumeStepDown failed: " << err.ErrorMessage() << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool ToggleMasterMute() {
+    if (!pEndpointVolume) {
+        std::cerr << "Error: Audio volume control not initialized." << std::endl;
+        return false;
+    }
+    BOOL currentMute = FALSE;
+    HRESULT hr = pEndpointVolume->GetMute(&currentMute);
+    if (FAILED(hr)) {
+         _com_error err(hr);
+        std::wcerr << L"Error: GetMute failed: " << err.ErrorMessage() << std::endl;
+        return false;
+    }
+    hr = pEndpointVolume->SetMute(!currentMute, NULL);
+    if (FAILED(hr)) {
+         _com_error err(hr);
+        std::wcerr << L"Error: SetMute failed: " << err.ErrorMessage() << std::endl;
+        return false;
+    }
+    return true;
+}
+#else
+// Provide stub implementations for non-Windows platforms
+bool InitializeAudioControl() { return false; }
+void UninitializeAudioControl() {}
+bool IncreaseMasterVolume() { return false; }
+bool DecreaseMasterVolume() { return false; }
+bool ToggleMasterMute() { return false; }
+#endif // _WIN32
 
 } // namespace InputUtils

@@ -224,7 +224,7 @@ void UIManager::drawButtonGridWindow()
                 printf("Button '%s' (ID: %s) clicked! Action: %s(%s)\n", 
                        button.name.c_str(), button.id.c_str(), 
                        button.action_type.c_str(), button.action_param.c_str());
-                m_actionExecutor.executeAction(button.id);
+                m_actionExecutor.requestAction(button.id);
             }
 
             // Handle layout (wrapping)
@@ -393,65 +393,81 @@ void UIManager::drawConfigurationWindow()
                                                : "";
         bool isHotkeyAction = (currentActionTypeStr == "hotkey");
         bool isLaunchAppAction = (currentActionTypeStr == "launch_app");
+        // Check if action type starts with "media_"
+        bool isMediaAction = (currentActionTypeStr.rfind("media_", 0) == 0);
 
-        if (isHotkeyAction)
-        {
-            // Hotkey specific input logic with manual toggle
-            ImGui::Checkbox("##ManualHotkeyCheckbox", &m_manualHotkeyEntry); // Checkbox first
-             ImGui::SameLine(); ImGui::TextUnformatted(m_translator.get("hotkey_manual_input_checkbox").c_str()); // Checkbox label
-             if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("hotkey_manual_input_tooltip").c_str()); }
-             ImGui::NewLine(); // Move input to next line within the cell
+        // --- Action Param Input based on Type ---
+        if (isMediaAction) {
+            // --- Media Action: Display Disabled Input ---
+            ImGui::BeginDisabled(true); // Start disabled state
+            char disabledText[] = "N/A"; // Placeholder text
+            // Use Push/PopItemWidth to control width even when disabled
+            float mediaWidth = ImGui::GetContentRegionAvail().x - helpIconWidth;
+            ImGui::PushItemWidth(mediaWidth > 0 ? mediaWidth : -FLT_MIN);
+            ImGui::InputText("##ActionParamDisabled", disabledText, sizeof(disabledText), ImGuiInputTextFlags_ReadOnly);
+            ImGui::PopItemWidth();
+            ImGui::EndDisabled(); // End disabled state
+            ImGui::SameLine(); ImGui::TextDisabled("(?)"); // Keep help icon
+            if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("action_param_tooltip").c_str()); }
+            
+            // Clear the actual buffer if it contains data from a previous type
+            if (strlen(m_newButtonActionParam) > 0) {
+                m_newButtonActionParam[0] = '\0';
+            }
+            // Ensure hotkey capture mode is off if we switched to media type
+            if (m_isCapturingHotkey) m_isCapturingHotkey = false;
+
+        } else if (isHotkeyAction) {
+            // --- Hotkey Action --- 
+            // (Hotkey logic including checkbox, NewLine, PushItemWidth, InputText variants, PopItemWidth, SameLine, TextDisabled, Tooltip)
+            ImGui::Checkbox("##ManualHotkeyCheckbox", &m_manualHotkeyEntry);
+            ImGui::SameLine(); ImGui::TextUnformatted(m_translator.get("hotkey_manual_input_checkbox").c_str());
+            if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("hotkey_manual_input_tooltip").c_str()); }
+            ImGui::NewLine();
 
             float hotkeyWidth = ImGui::GetContentRegionAvail().x - helpIconWidth;
-            ImGui::PushItemWidth(hotkeyWidth > 0 ? hotkeyWidth : -FLT_MIN); // Input takes calculated width
-            if (m_manualHotkeyEntry)
-            {
-                m_isCapturingHotkey = false; // Ensure capture mode is off
+            ImGui::PushItemWidth(hotkeyWidth > 0 ? hotkeyWidth : -FLT_MIN);
+            if (m_manualHotkeyEntry) {
+                m_isCapturingHotkey = false;
                 ImGui::InputText("##ActionParamInputManual", m_newButtonActionParam, sizeof(m_newButtonActionParam));
-            }
-            else
-            {
-                if (m_isCapturingHotkey)
-                {
+            } else {
+                if (m_isCapturingHotkey) {
                     char capturePlaceholder[256];
                     const char* promptFormat = m_translator.get("hotkey_capture_prompt").c_str();
                     snprintf(capturePlaceholder, sizeof(capturePlaceholder), promptFormat, m_newButtonActionParam);
                     ImGui::InputText("##ActionParamInputCapturing", capturePlaceholder, sizeof(capturePlaceholder), ImGuiInputTextFlags_ReadOnly);
                     if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("hotkey_capture_tooltip_capturing").c_str()); }
                     if (InputUtils::TryCaptureHotkey(m_newButtonActionParam, sizeof(m_newButtonActionParam))) {
-                        m_isCapturingHotkey = false; // Exit capture mode
+                        m_isCapturingHotkey = false;
                     }
-                     if (!ImGui::IsItemActive() && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
-                         ImGui::SetKeyboardFocusHere(-1);
-                     }
-                }
-                else
-                {
+                    if (!ImGui::IsItemActive() && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
+                        ImGui::SetKeyboardFocusHere(-1);
+                    }
+                } else {
                     ImGui::InputText("##ActionParamInput", m_newButtonActionParam, sizeof(m_newButtonActionParam));
                     if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("hotkey_capture_tooltip_start").c_str()); }
                     if (ImGui::IsItemClicked()) { m_isCapturingHotkey = true; }
                 }
             }
             ImGui::PopItemWidth();
-            ImGui::SameLine(); ImGui::TextDisabled("(?)"); // Help icon next to input
+            ImGui::SameLine(); ImGui::TextDisabled("(?)");
             if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("action_param_tooltip").c_str()); }
-        }
-        else
-        {
+
+        } else { // Handles launch_app, open_url, etc.
             // --- Standard Input for other action types ---
-            m_isCapturingHotkey = false; // Ensure capture mode is off if not hotkey type
+             // Ensure hotkey capture mode is off
+            if (m_isCapturingHotkey) m_isCapturingHotkey = false;
             float browseButtonWidth = ImGui::CalcTextSize(m_translator.get("browse_button_label").c_str()).x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
             float standardInputWidth = ImGui::GetContentRegionAvail().x - helpIconWidth - (isLaunchAppAction ? browseButtonWidth : 0.0f);
             ImGui::PushItemWidth(standardInputWidth > 0 ? standardInputWidth : -FLT_MIN);
             ImGui::InputText("##ActionParamInput", m_newButtonActionParam, sizeof(m_newButtonActionParam));
             ImGui::PopItemWidth();
-            ImGui::SameLine(); ImGui::TextDisabled("(?)"); // Help icon next to input
+            ImGui::SameLine(); ImGui::TextDisabled("(?)");
             if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("action_param_tooltip").c_str()); }
 
             if (isLaunchAppAction) {
                 ImGui::SameLine();
-                if (ImGui::Button(m_translator.get("browse_button_label").c_str()))
-                {
+                if (ImGui::Button(m_translator.get("browse_button_label").c_str())) {
                     const char* key = m_editingButtonId.empty() ? "SelectAppDlgKey_Add" : "SelectAppDlgKey_Edit";
                     const char* title = m_translator.get("select_app_dialog_title").c_str();
                     const char* filters = ".exe{,.*}";
@@ -460,8 +476,8 @@ void UIManager::drawConfigurationWindow()
                 }
             }
         }
-        // If action type changes away from hotkey, ensure capture mode is off
-        if (m_isCapturingHotkey && !isHotkeyAction) { m_isCapturingHotkey = false; }
+        // If action type changes away from hotkey, ensure capture mode is off (already handled in branches)
+        // if (m_isCapturingHotkey && !isHotkeyAction && !isMediaAction) { m_isCapturingHotkey = false; }
 
         // --- Row 5: Icon Path ---
         ImGui::TableNextRow();

@@ -57,6 +57,9 @@ add_executable(${PROJECT_NAME}
     src/GifLoader.cpp # ADDED GifLoader source file
 )
 
+# ADDED: Define NOMINMAX globally to prevent windows.h min/max macro conflicts
+target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX)
+
 # Tell ImGui to use GLEW
 target_compile_definitions(${PROJECT_NAME} PRIVATE IMGUI_IMPL_OPENGL_LOADER_GLEW)
 

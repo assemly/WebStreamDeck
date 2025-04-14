@@ -4,16 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>WebStreamDeck Control</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/components/header.css">
+    <link rel="stylesheet" href="css/components/button.css">
+    <link rel="stylesheet" href="css/components/pagination.css">
 </head>
 <body>
-    <h1>WebStreamDeck</h1>
-    <div id="connection-status">Initializing...</div>
+    <header>
+        <h1 id="app-title" class="fullscreen-title">WebStreamDeck</h1>
+        <div id="connection-status">Initializing...</div>
+    </header>
 
     <div id="button-grid">
         <!-- Buttons will be loaded here by script.js -->
     </div>
 
-    <script src="script.js"></script>
+    <div id="pagination-dots" style="display: none;"></div>
+
+    <!-- Load new JS modules in order -->
+    <script src="js/config.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/websocket.js"></script>
+    <script src="js/main.js"></script>
 </body>
 </html> 

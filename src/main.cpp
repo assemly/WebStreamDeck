@@ -16,6 +16,7 @@
 #include "ActionExecutor.hpp" // Include ActionExecutor header
 #include "CommServer.hpp" // Include CommServer header
 #include "TranslationManager.hpp" // Include TranslationManager header
+#include "InputUtils.hpp" // For audio control init/uninit
 
 static void glfw_error_callback(int error, const char* description)
 {
@@ -124,8 +125,8 @@ int main(int, char**)
                         if (buttonPayload.contains("button_id") && buttonPayload["button_id"].is_string()) {
                             std::string buttonId = buttonPayload["button_id"].get<std::string>();
                             std::cout << "Received button press for ID: " << buttonId << std::endl;
-                            // Execute the action
-                            actionExecutor.executeAction(buttonId);
+                            // UPDATED: Call requestAction instead of executeAction
+                            actionExecutor.requestAction(buttonId);
                         } else {
                             std::cerr << "Message handler: Missing or invalid 'button_id' in payload." << std::endl;
                         }
@@ -153,16 +154,30 @@ int main(int, char**)
 
     ImVec4 clear_color = ImVec4(0.1f, 0.1f, 0.1f, 1.00f);
 
+    // Initialize Core Audio Control (Windows only)
+#ifdef _WIN32
+    if (!InputUtils::InitializeAudioControl()) {
+        std::cerr << "Warning: Failed to initialize Core Audio controls." << std::endl;
+        // Continue execution even if audio control fails, 
+        // volume buttons will just log errors when pressed.
+    }
+#endif
+
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
+
+        // ADDED: Process actions requested from other threads
+        actionExecutor.processPendingActions();
+
+        // Update server status in UIManager
+        uiManager.setServerStatus(commServer->is_running(), webSocketPort);
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
         // Pass server status to UI Manager if needed (e.g., for display or QR code generation)
-        uiManager.setServerStatus(commServer->is_running(), webSocketPort);
         uiManager.drawUI();
 
         // --- All UI drawing logic moved to UIManager --- 
@@ -191,6 +206,11 @@ int main(int, char**)
     std::cout << "Stopping WebSocket server..." << std::endl;
     commServer->stop(); // Stop the server thread before cleaning up ImGui/GLFW
     std::cout << "WebSocket server stopped." << std::endl;
+
+    // Uninitialize Core Audio Control (Windows only)
+#ifdef _WIN32
+    InputUtils::UninitializeAudioControl();
+#endif
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();

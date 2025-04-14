@@ -1,0 +1,106 @@
+/* web/css/components/button.css */
+
+/* Default #button-grid styles (Portrait) */
+#button-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    padding: 20px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 400px;
+    margin: 20px auto 0;
+}
+
+/* Default .grid-button styles */
+.grid-button {
+    background-color: #3a3f4b;
+    border: 1px solid #4b5263;
+    color: #abb2bf;
+    padding: 10px;
+    font-size: 0.9em;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: center;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    /* Default: width/height determined by grid cell */
+}
+
+.grid-button:hover {
+    background-color: #4b5263;
+}
+
+.grid-button:active {
+    background-color: #61afef;
+    transform: scale(0.95);
+}
+
+/* Default Icon/Text Styles */
+.grid-button.has-icon { /* Basic structure if needed */ }
+
+.grid-button.has-icon img {
+    max-width: 60%;
+    max-height: 45px;
+    object-fit: contain;
+    margin-bottom: 5px; /* Space between icon and text */
+}
+
+.grid-button.has-icon .button-text {
+    font-size: 0.8em;
+    line-height: 1.2;
+    display: block;
+    max-width: 100%;
+    overflow-wrap: break-word;
+}
+
+
+/* Landscape Styles for Button Grid */
+@media (orientation: landscape) and (max-height: 600px) {
+
+    /* Base landscape button grid container styles */
+    #button-grid {
+        margin-top: 40px;
+        max-width: none;
+        padding: 5px;
+        height: calc(100vh - 40px); /* Default height, pagination overrides */
+        box-sizing: border-box;
+    }
+
+    /* Styles for the SIMPLE 6-column landscape grid */
+    #button-grid.landscape-simple-grid {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 5px;
+        /* Uses height from base landscape #button-grid */
+    }
+
+    /* Styles for buttons within the SIMPLE 6-column landscape grid */
+    #button-grid.landscape-simple-grid .grid-button {
+        font-size: 0.8em;
+        min-height: initial;
+        padding: 3px;
+        width: 100%; /* Fill cell */
+        height: 100%; /* Fill cell */
+        /* No aspect ratio */
+    }
+
+    #button-grid.landscape-simple-grid .grid-button.has-icon img {
+        max-width: 70%;
+        max-height: 60%;
+        object-fit: contain;
+        margin-bottom: 2px;
+    }
+
+    #button-grid.landscape-simple-grid .grid-button.has-icon .button-text {
+        font-size: 0.6em;
+        max-height: 35%;
+        line-height: 1;
+        overflow: hidden;
+    }
+} 

@@ -1,0 +1,31 @@
+/* web/css/main.css */
+body {
+    font-family: sans-serif;
+    background-color: #282c34;
+    color: #abb2bf;
+    margin: 0;
+}
+
+/* Base landscape body adjustments */
+@media (orientation: landscape) and (max-height: 600px) {
+    body {
+        height: 100vh;
+        overflow: hidden;
+    }
+}
+
+/* --- Common Utilities (if any) --- */
+.action-button {
+    background-color: #444;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 15px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+}
+
+.action-button:hover {
+    background-color: #666;
+} 

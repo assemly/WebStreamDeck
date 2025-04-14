@@ -11,7 +11,7 @@
     "button_id_tooltip": "Unique identifier for the button (e.g., 'btn_app_xyz'). Cannot be changed later.",
     "button_name_tooltip": "The text displayed on the button in the web interface and button grid.",
     "action_type_tooltip": "Type of action to perform (e.g., 'launch_app', 'open_url', 'hotkey').",
-    "action_param_tooltip": "Parameter for the action type:\n- launch_app: Full path to the executable (e.g., C:\\Windows\\notepad.exe)\n- open_url: The URL to open (e.g., https://www.google.com)\n- hotkey: Key combination (e.g., CTRL+ALT+T, SHIFT+F5, WIN+D). Use + to combine keys.",
+    "action_param_tooltip": "Parameter for the action type:\n- launch_app: Full path to the executable\n- open_url: The URL to open\n- hotkey: Key combination (e.g., CTRL+ALT+T)\n- Media Keys: No parameter needed.",
     "add_button_label": "Add Button",
     "edit_button_label": "Edit",
     "delete_button_label": "Delete",
@@ -62,5 +62,12 @@
     "hotkey_manual_input_checkbox": "Manual Input",
     "hotkey_manual_input_tooltip": "Check this box to manually type the hotkey string (e.g., CTRL+ALT+T). Uncheck to enable click-to-capture.",
     "browse_button_label": "...",
-    "select_app_dialog_title": "Select Application File"
+    "select_app_dialog_title": "Select Application File",
+    "action_type_media_volume_up_display": "Media: Volume Up",
+    "action_type_media_volume_down_display": "Media: Volume Down",
+    "action_type_media_mute_display": "Media: Mute",
+    "action_type_media_play_pause_display": "Media: Play/Pause",
+    "action_type_media_next_track_display": "Media: Next Track",
+    "action_type_media_prev_track_display": "Media: Previous Track",
+    "action_type_media_stop_display": "Media: Stop"
 }

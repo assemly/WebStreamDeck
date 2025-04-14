@@ -59,7 +59,19 @@ private:
     std::string m_buttonIdToDelete = "";
 
     // List of supported action types (could be moved to ConfigManager or enum later)
-    const std::vector<std::string> m_supportedActionTypes = {"launch_app", "open_url", "hotkey"}; // Added hotkey
+    const std::vector<std::string> m_supportedActionTypes = {
+        "launch_app", 
+        "open_url", 
+        "hotkey",
+        // ADDED: Media control action types
+        "media_volume_up",
+        "media_volume_down",
+        "media_mute",
+        "media_play_pause",
+        "media_next_track",
+        "media_prev_track",
+        "media_stop"
+    };
 
     // Private helper methods for drawing specific windows
     void drawButtonGridWindow();
