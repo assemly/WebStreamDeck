@@ -2,11 +2,19 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 #include <stdio.h>
+
+// Define this before including glfw3.h to prevent it from including gl.h
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
+
+#include <GL/glew.h>      // Include GLEW header (now safe after GLFW_INCLUDE_NONE)
+#include <memory> // For std::unique_ptr
+#include <iostream> // For std::cerr
 
 #include "UIManager.hpp" // Include the new UI Manager header
 #include "ConfigManager.hpp" // Include ConfigManager header
 #include "ActionExecutor.hpp" // Include ActionExecutor header
+#include "CommServer.hpp" // Include CommServer header
 
 static void glfw_error_callback(int error, const char* description)
 {
@@ -29,6 +37,16 @@ int main(int, char**)
         return 1;
     }
     glfwMakeContextCurrent(window);
+
+    // Initialize GLEW *after* creating the OpenGL context
+    GLenum err = glewInit();
+    if (GLEW_OK != err)
+    {
+        fprintf(stderr, "Error initializing GLEW: %s\n", glewGetErrorString(err));
+        glfwTerminate();
+        return 1;
+    }
+
     glfwSwapInterval(1); // Enable vsync
 
     IMGUI_CHECKVERSION();
@@ -60,6 +78,48 @@ int main(int, char**)
     // Create the UI Manager instance, passing both managers
     UIManager uiManager(configManager, actionExecutor);
 
+    // Create and Start Communication Server
+    auto commServer = std::make_unique<CommServer>();
+    const int webSocketPort = 9002;
+
+    // Define the message handler lambda
+    commServer->set_message_handler(
+        [&actionExecutor](uWS::WebSocket<false, true, PerSocketData>* /*ws*/, const json& payload, bool /*isBinary*/) {
+            try {
+                // Check protocol: { "type": "button_press", "payload": { "button_id": "..." } }
+                if (payload.contains("type") && payload["type"].is_string() && payload["type"] == "button_press") {
+                    if (payload.contains("payload") && payload["payload"].is_object()) {
+                        const auto& buttonPayload = payload["payload"];
+                        if (buttonPayload.contains("button_id") && buttonPayload["button_id"].is_string()) {
+                            std::string buttonId = buttonPayload["button_id"].get<std::string>();
+                            std::cout << "Received button press for ID: " << buttonId << std::endl;
+                            // Execute the action
+                            actionExecutor.executeAction(buttonId);
+                        } else {
+                            std::cerr << "Message handler: Missing or invalid 'button_id' in payload." << std::endl;
+                        }
+                    } else {
+                        std::cerr << "Message handler: Missing or invalid 'payload' object." << std::endl;
+                    }
+                } else {
+                    // Optional: Handle other message types or ignore
+                    std::cerr << "Message handler: Received unknown message type or format." << std::endl;
+                }
+            } catch (const json::exception& e) {
+                std::cerr << "Message handler: JSON processing error: " << e.what() << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "Message handler: General error: " << e.what() << std::endl;
+            }
+        }
+    );
+
+    // Start the server
+    if (!commServer->start(webSocketPort)) {
+        std::cerr << "!!!!!!!! FAILED TO START WEBSOCKET SERVER ON PORT " << webSocketPort << " !!!!!!!!" << std::endl;
+        // Decide how to handle failure - maybe exit, maybe continue without server?
+        // For now, just print error and continue.
+    }
+
     ImVec4 clear_color = ImVec4(0.1f, 0.1f, 0.1f, 1.00f);
 
     while (!glfwWindowShouldClose(window))
@@ -70,7 +130,8 @@ int main(int, char**)
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        // Draw the entire UI using the UIManager
+        // Pass server status to UI Manager if needed (e.g., for display or QR code generation)
+        uiManager.setServerStatus(commServer->is_running(), webSocketPort);
         uiManager.drawUI();
 
         // --- All UI drawing logic moved to UIManager --- 
@@ -96,6 +157,10 @@ int main(int, char**)
     }
 
     // Cleanup
+    std::cout << "Stopping WebSocket server..." << std::endl;
+    commServer->stop(); // Stop the server thread before cleaning up ImGui/GLFW
+    std::cout << "WebSocket server stopped." << std::endl;
+
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();

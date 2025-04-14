@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 project(WebStreamDeck LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Add ImGui manually from docking branch
@@ -32,6 +32,12 @@ target_link_libraries(imgui PUBLIC glfw)
 find_package(OpenGL REQUIRED)
 find_package(Threads REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED) # Find nlohmann_json via vcpkg
+find_package(unofficial-uwebsockets CONFIG REQUIRED)  # CORRECTED: Use package name from vcpkg output
+find_package(GLEW REQUIRED) # Find GLEW
+
+# Add local third-party library: qrcodegen
+add_library(qrcodegen_lib third_party/QR-Code-generator-1.8.0/qrcodegen.cpp)
+target_include_directories(qrcodegen_lib PUBLIC third_party/QR-Code-generator-1.8.0)
 
 # Add the executable
 add_executable(${PROJECT_NAME}
@@ -39,14 +45,20 @@ add_executable(${PROJECT_NAME}
     src/UIManager.cpp
     src/ConfigManager.cpp
     src/ActionExecutor.cpp
+    src/CommServer.cpp   # Add the new CommServer source file
 )
+
+# Tell ImGui to use GLEW
+target_compile_definitions(${PROJECT_NAME} PRIVATE IMGUI_IMPL_OPENGL_LOADER_GLEW)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     imgui       # Links our imgui library (which now pulls in glfw publicly)
     # glfw      # No longer needed here explicitly
-    OpenGL::GL
+    GLEW::glew # Link GLEW instead
     Threads::Threads
     nlohmann_json::nlohmann_json # Link nlohmann_json target
+    unofficial::uwebsockets::uwebsockets     # CORRECTED: Use target name from vcpkg output
+    qrcodegen_lib         # Link the local qrcodegen library target
 )
 
 
