@@ -13,6 +13,7 @@ add_library(imgui
     third_party/imgui/imgui_demo.cpp
     third_party/imgui/backends/imgui_impl_glfw.cpp
     third_party/imgui/backends/imgui_impl_opengl3.cpp
+    third_party/imgui/ImGuiFileDialog.cpp
 )
 
 target_include_directories(imgui PUBLIC
@@ -34,10 +35,15 @@ find_package(Threads REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED) # Find nlohmann_json via vcpkg
 find_package(unofficial-uwebsockets CONFIG REQUIRED)  # CORRECTED: Use package name from vcpkg output
 find_package(GLEW REQUIRED) # Find GLEW
+find_package(Stb REQUIRED) # Find stb via vcpkg (Module mode, Capitalized)
+find_package(GIF REQUIRED) 
 
 # Add local third-party library: qrcodegen
 add_library(qrcodegen_lib third_party/QR-Code-generator-1.8.0/qrcodegen.cpp)
 target_include_directories(qrcodegen_lib PUBLIC third_party/QR-Code-generator-1.8.0)
+
+# Ensure stb directory is included (though stb_image is header-only for includes)
+# target_include_directories(${PROJECT_NAME} PRIVATE third_party/stb) # REMOVED this line
 
 # Add the executable
 add_executable(${PROJECT_NAME}
@@ -46,7 +52,19 @@ add_executable(${PROJECT_NAME}
     src/ConfigManager.cpp
     src/ActionExecutor.cpp
     src/CommServer.cpp   # Add the new CommServer source file
+    src/TranslationManager.cpp # Added TranslationManager source file
+    src/Utils/InputUtils.cpp # <<< ADDED
+    src/Utils/GifLoader.cpp # ADDED GifLoader source file
+    src/Utils/TextureLoader.cpp # <<< ADDED
+    src/UIWindows/UIButtonGridWindow.cpp # <<< ADDED
+    src/UIWindows/UIConfigurationWindow.cpp # <<< ADDED
+    src/UIWindows/UIStatusLogWindow.cpp # <<< ADDED
+    src/UIWindows/UIQrCodeWindow.cpp # <<< ADDED
+    src/Utils/NetworkUtils.cpp # <<< ADDED
 )
+
+# ADDED: Define NOMINMAX globally to prevent windows.h min/max macro conflicts
+target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX)
 
 # Tell ImGui to use GLEW
 target_compile_definitions(${PROJECT_NAME} PRIVATE IMGUI_IMPL_OPENGL_LOADER_GLEW)
@@ -59,8 +77,42 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     nlohmann_json::nlohmann_json # Link nlohmann_json target
     unofficial::uwebsockets::uwebsockets     # CORRECTED: Use target name from vcpkg output
     qrcodegen_lib         # Link the local qrcodegen library target
+    # stb::stb              # Link stb via vcpkg # REMOVED: stb is likely header-only, no target to link
+    GIF::GIF              # ADDED: Link against giflib target (as suggested by vcpkg)
 )
 
+# Copy the web directory to the executable output directory after build
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/web # Source directory (project root/web)
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>/web # Destination directory (executable dir/web)
+    COMMENT "Copying web assets to output directory"
+)
+
+# Copy the lang directory from assets to the executable output directory after build
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/assets/lang # Source directory (project root/assets/lang)
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets/lang # Destination directory (executable dir/assets/lang)
+    COMMENT "Copying language assets to output directory"
+)
+
+# Copy the fonts directory from assets to the executable output directory after build
+# NOTE: Adjust the filename if you are using a different font
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different # Copy the entire directory
+        ${CMAKE_SOURCE_DIR}/assets/fonts # Source fonts directory
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets/fonts # Destination fonts directory
+    COMMENT "Copying font assets to output directory"
+)
+
+# Copy the icons directory from assets to the executable output directory after build
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+        ${CMAKE_SOURCE_DIR}/assets/icons # Source icons directory (adjust if needed)
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets/icons # Destination icons directory
+    COMMENT "Copying icon assets to output directory"
+)
 
 # Optional: Show console window on Windows alongside GUI (uses standard 'main' entry point)
 if(WIN32)

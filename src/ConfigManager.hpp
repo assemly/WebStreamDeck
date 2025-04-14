@@ -36,9 +36,9 @@ public:
     std::optional<ButtonConfig> getButtonById(const std::string& id) const;
 
     // --- Methods to modify configuration (needed later by UI) ---
-    // bool addButton(const ButtonConfig& button); 
-    // bool updateButton(const std::string& id, const ButtonConfig& button);
-    // bool removeButton(const std::string& id);
+    bool addButton(const ButtonConfig& button);
+    bool updateButton(const std::string& id, const ButtonConfig& button);
+    bool removeButton(const std::string& id);
 
 private:
     std::vector<ButtonConfig> m_buttons;

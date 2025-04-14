@@ -1,0 +1,105 @@
+/* web/css/components/pagination.css */
+
+/* --- Pagination Styles (Only active in Landscape with > 18 buttons) --- */
+@media (orientation: landscape) and (max-height: 600px) {
+
+    /* Viewport (#button-grid when pagination active) */
+    #button-grid.paginated {
+        display: block; /* Override grid/simple grid */
+        overflow: hidden;
+        height: calc(100vh - 40px - 35px); /* CHANGED: Subtract 75px total */
+        padding: 0; /* No padding on viewport */
+        gap: 0;
+        grid-template-columns: none; /* Ensure grid layout is removed */
+        position: relative; /* Keep for absolutely positioned elements if any added later */
+        -webkit-overflow-scrolling: touch; /* ADDED: Improve momentum scrolling on iOS if swipe is added later */
+        background-color: #000; /* ADDED: Match page background */
+         /* Inherits margin-top, max-width from base landscape #button-grid */
+    }
+
+    /* Pages Container */
+    .button-pages-container {
+        height: 100%;
+        /* Width is implicitly 100% of parent now */
+    }
+
+    /* Single Page - Default hidden, active shown as grid */
+    #button-grid.paginated .button-page {
+        display: none; /* Hide pages by default */
+        width: 100%; /* Take full width of container */
+        height: 100%;
+        grid-template-columns: repeat(6, 1fr); 
+        grid-template-rows: repeat(3, 1fr); 
+        gap: 5px;
+        padding: 5px;
+        box-sizing: border-box;
+        background-color: #000;
+        max-width: none; 
+    }
+    /* Show the active page as a grid */
+    #button-grid.paginated .button-page.active {
+        display: grid; 
+    }
+
+    /* Button inside pagination page - Increase Specificity */
+    #button-grid.paginated .button-page .grid-button {
+        min-height: initial;
+        height: 100%;
+        width: auto; 
+        /* aspect-ratio: 1 / 1; Set via JS */
+        padding: 3px;
+        display: flex; 
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        background-color: #000;
+        border: 1px solid #333;
+        margin: 0 auto;
+    }
+
+    #button-grid.paginated .button-page .grid-button.has-icon img {
+        max-width: 65%;
+        max-height: 55%;
+        object-fit: contain;
+         margin-bottom: 2px;
+    }
+
+    #button-grid.paginated .button-page .grid-button.has-icon .button-text {
+        font-size: 0.6em;
+        max-height: 30%;
+        line-height: 1;
+        overflow: hidden;
+    }
+
+    /* Pagination Dots Container */
+    #pagination-dots {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 30px;
+        display: flex; /* Hidden by default, JS shows if needed */
+        justify-content: center;
+        align-items: center;
+        background-color: #222;
+        z-index: 100;
+        box-sizing: border-box; /* ADDED: Ensure padding doesn't add height */
+    }
+
+    /* Individual Dots */
+    .dot {
+        height: 10px;
+        width: 10px;
+        background-color: #bbb;
+        border-radius: 50%;
+        display: inline-block;
+        margin: 0 5px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+    .dot.active {
+        background-color: #61afef;
+    }
+} 

@@ -15,6 +15,9 @@
 #include "ConfigManager.hpp" // Include ConfigManager header
 #include "ActionExecutor.hpp" // Include ActionExecutor header
 #include "CommServer.hpp" // Include CommServer header
+#include "TranslationManager.hpp" // Include TranslationManager header
+#include "Utils/InputUtils.hpp" // For audio control init/uninit
+#include "Utils/TextureLoader.hpp" // <<< ADDED
 
 static void glfw_error_callback(int error, const char* description)
 {
@@ -69,17 +72,47 @@ int main(int, char**)
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
-    // Create the Config Manager instance FIRST
-    ConfigManager configManager; // Loads config in constructor
+    // Load Fonts
+    // - If no fonts are loaded, dear imgui will use the default font.
+    // - Read https://github.com/ocornut/imgui/blob/master/docs/FONTS.md for more details.
+    // - AddFontFromFileTTF() will return the ImFont* so you can store it if you need to select the font among multiple.
+    // - If the file cannot be loaded, the function will return NULL. Please handle those errors in your application.
+    // - The fonts will be rasterized at a given size (w/ oversampling) and stored into a texture when calling ImFontAtlas::Build().
+    // For Chinese characters, you need a font supporting them and to specify the correct glyph ranges.
+    ImFontAtlas* fonts = io.Fonts;
+    fonts->Clear(); // Clear existing fonts (including default)
+    
+    // Load font from the assets/fonts directory (relative to executable)
+    // MAKE SURE the font file exists in assets/fonts/ and CMakeLists copies it!
+    std::string fontPath = "assets/fonts/NotoSansSC-VariableFont_wght.ttf"; // MODIFIED: Use Noto Sans SC Variable font
+    float fontSize = 18.0f; // Adjust font size as needed
+    
+    ImFontConfig fontConfig;
+    fontConfig.MergeMode = false; // Replace default font
+    fontConfig.PixelSnapH = true;
+    // Load default Latin characters + FULL simplified Chinese characters
+    fonts->AddFontFromFileTTF(fontPath.c_str(), fontSize, &fontConfig, fonts->GetGlyphRangesChineseFull());
+    
+    // Optional: You could merge icons or other fonts here if needed later
+    // Example: fonts->AddFontFromFileTTF("path/to/icons.ttf", fontSize, &fontConfig, icon_ranges);
+    
+    // Build the font atlas
+    // This must be done after adding all fonts
+    unsigned char* pixels;
+    int width, height;
+    fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+    // No need to explicitly build if using default ImGui_ImplOpenGL3_NewFrame etc.
+    // ImGui_ImplOpenGL3_CreateFontsTexture(); // Might be needed depending on backend setup, but often automatic
 
-    // Create the Action Executor instance, passing the config manager
+
+    // Create Core Managers
+    TranslationManager translationManager("assets/lang", "zh"); // Loads default lang (zh)
+    ConfigManager configManager;
     ActionExecutor actionExecutor(configManager);
+    UIManager uiManager(configManager, actionExecutor, translationManager);
 
-    // Create the UI Manager instance, passing both managers
-    UIManager uiManager(configManager, actionExecutor);
-
-    // Create and Start Communication Server
-    auto commServer = std::make_unique<CommServer>();
+    // Create Communication Server, passing ConfigManager
+    auto commServer = std::make_unique<CommServer>(configManager);
     const int webSocketPort = 9002;
 
     // Define the message handler lambda
@@ -93,8 +126,8 @@ int main(int, char**)
                         if (buttonPayload.contains("button_id") && buttonPayload["button_id"].is_string()) {
                             std::string buttonId = buttonPayload["button_id"].get<std::string>();
                             std::cout << "Received button press for ID: " << buttonId << std::endl;
-                            // Execute the action
-                            actionExecutor.executeAction(buttonId);
+                            // UPDATED: Call requestAction instead of executeAction
+                            actionExecutor.requestAction(buttonId);
                         } else {
                             std::cerr << "Message handler: Missing or invalid 'button_id' in payload." << std::endl;
                         }
@@ -122,16 +155,30 @@ int main(int, char**)
 
     ImVec4 clear_color = ImVec4(0.1f, 0.1f, 0.1f, 1.00f);
 
+    // Initialize Core Audio Control (Windows only)
+#ifdef _WIN32
+    if (!InputUtils::InitializeAudioControl()) {
+        std::cerr << "Warning: Failed to initialize Core Audio controls." << std::endl;
+        // Continue execution even if audio control fails, 
+        // volume buttons will just log errors when pressed.
+    }
+#endif
+
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
+
+        // ADDED: Process actions requested from other threads
+        actionExecutor.processPendingActions();
+
+        // Update server status in UIManager
+        uiManager.setServerStatus(commServer->is_running(), webSocketPort);
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
         // Pass server status to UI Manager if needed (e.g., for display or QR code generation)
-        uiManager.setServerStatus(commServer->is_running(), webSocketPort);
         uiManager.drawUI();
 
         // --- All UI drawing logic moved to UIManager --- 
@@ -160,6 +207,13 @@ int main(int, char**)
     std::cout << "Stopping WebSocket server..." << std::endl;
     commServer->stop(); // Stop the server thread before cleaning up ImGui/GLFW
     std::cout << "WebSocket server stopped." << std::endl;
+
+    // Uninitialize Core Audio Control (Windows only)
+#ifdef _WIN32
+    InputUtils::UninitializeAudioControl();
+#endif
+
+    TextureLoader::ReleaseStaticTextures(); // <<< ADDED: Release global static textures before shutdown
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
