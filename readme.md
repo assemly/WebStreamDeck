@@ -1,252 +1,271 @@
-# 项目名称：WebStreamDeck (示例名) - C++桌面端与Web手机端联动控制系统
+# 项目名称：WebStreamDeck - C++桌面端与Web手机端联动控制系统
 
-**版本:** 1.0
-**日期:** 2024-07-25
-**目标平台:** Windows 11 (开发环境: Visual Studio 2022)
-**核心技术:** C++, ImGui, WebSocket, WinAPI, JSON (所有 C++ 依赖项通过 vcpkg 管理)
-**推荐依赖库 (vcpkg):** `imgui[core,glfw-binding,opengl3-binding]`, `websocketpp` (或 `uwebsockets`), `nlohmann-json`, `qrcodegen`
+**版本:** 1.1 (Refactored)
+**日期:** 2024-07-26
+**目标平台:** Windows (开发环境: Visual Studio / MinGW with CMake)
+**核心技术:** C++, ImGui (Docking Branch), GLFW, GLEW, uWebSockets, JSON, WinAPI
+**依赖库 (vcpkg):** `imgui[core,glfw-binding,opengl3-binding]`, `glfw3`, `nlohmann-json`, `unofficial-uwebsockets`, `glew`, `stb`, `giflib`
+**第三方库 (本地):** `qrcodegen` (位于 `third_party/`)
 
 ## 1. 概述 (Overview)
 
-本项目旨在创建一个桌面应用程序，允许用户配置自定义操作按钮（类似 Stream Deck），并通过手机浏览器扫描二维码连接后，在手机网页上触发这些按钮，从而在电脑上执行相应操作。系统采用 C++ 作为主要开发语言，利用 ImGui 库构建用户界面，结合独立的网络库进行 WebSocket 通信，并结合 Windows API 实现底层系统操作。
-
+本项目旨在创建一个桌面应用程序，允许用户配置自定义操作按钮（类似 Stream Deck），并通过手机浏览器扫描二维码连接后，在手机网页上触发这些按钮，从而在电脑上执行相应操作。系统采用 C++ 作为主要开发语言，利用 ImGui 库构建用户界面，结合 uWebSockets 库进行 WebSocket 通信，并结合 Windows API 实现底层系统操作。
 
 ## 2. 系统架构图 (Conceptual Architecture)
 
 ```mermaid
 flowchart LR
-    subgraph Computer端_Windows_11
+    subgraph Computer端_Windows
         direction TB
-        A[用户界面 - ImGui] --> B(配置管理器)
-        B --> A
-        A --> C(通信服务器)
-        C --> D(动作执行器)
-        B --> D
-        D -- 调用 --> E[Windows API - 系统命令]
-        C -- WebSocket --> F[(局域网)]
-        A -- 显示 --> G[QR Code]
-        C -- 生成 --> G
+        A[UI Manager] --> B(Config Manager)
+        A --> C(Action Executor)
+        A --> D(CommServer - uWS/HTTP)
+
+        subgraph UIWindows
+            direction TB
+            WinGrid[Button Grid Window]
+            WinConfig[Configuration Window]
+            WinStatus[Status Log Window]
+            WinQR[QR Code Window]
+        end
+
+        subgraph Utils
+            direction RL
+            UtilNet[Network Utils]
+            UtilInput[Input Utils]
+            UtilTex[Texture Loader]
+            UtilGif[GIF Loader]
+        end
+
+        A -- 管理 --> UIWindows
+        UIWindows -- 使用 --> B
+        UIWindows -- 使用 --> C
+        UIWindows -- 使用 --> UtilTex
+        UIWindows -- 使用 --> UtilGif
+        A -- 使用 --> UtilNet
+
+        B --> WinConfig
+        C --> WinConfig
+        D -- WebSocket --> E[(局域网)]
+        D -- HTTP服务 --> E
+        D -- 请求 --> C
+        C -- 调用 --> F[Windows API]
+        C -- 使用 --> UtilInput
+        A -- 获取状态 --> D
+        WinStatus -- 显示状态 --> A
+        WinQR -- 显示QR --> A
+
+
     end
 
     subgraph Mobile端_浏览器
         direction TB
-        H[Web UI - HTML/CSS/JS] -- WebSocket --> F
+        G[Web UI - HTML/CSS/JS] -- WebSocket --> E
+        G -- HTTP请求 --> E
     end
 
-    F -- 连接 --> H
+    E -- 连接 --> G
 
-    %% 使用合适颜色适配 dark 模式
-    style A fill:#b300b3,stroke:#ddd,stroke-width:2px
-    style B fill:#6666cc,stroke:#ddd,stroke-width:2px
-    style C fill:#3399cc,stroke:#ddd,stroke-width:2px
-    style D fill:#ff9966,stroke:#ddd,stroke-width:2px
-    style E fill:#b300b3,stroke:#ddd,stroke-width:2px
-    style F fill:#6666cc,stroke:#ddd,stroke-width:2px
+    %% Style
+    style A fill:#5a3c96,stroke:#ddd,stroke-width:2px,color:#fff
+    style B fill:#3c6e96,stroke:#ddd,stroke-width:2px,color:#fff
+    style C fill:#965a3c,stroke:#ddd,stroke-width:2px,color:#fff
+    style D fill:#3c965a,stroke:#ddd,stroke-width:2px,color:#fff
+    style F fill:#b300b3,stroke:#ddd,stroke-width:2px,color:#fff
+    style E fill:#6666cc,stroke:#ddd,stroke-width:2px,color:#fff
+    style G fill:#ff9966,stroke:#ddd,stroke-width:2px,color:#000
+    style UIWindows fill:#222,stroke:#aaa,stroke-width:1px
+    style Utils fill:#222,stroke:#aaa,stroke-width:1px
+
 ```
 
 **图例:**
 
-*   **用户界面 (ImGui):** 桌面程序的即时模式图形用户界面，用于配置按钮、显示状态和二维码。
-*   **配置管理器:** 负责加载、保存和管理按钮布局及对应操作的配置信息（例如存为 JSON 文件）。
-*   **通信服务器:** 内嵌 WebSocket 服务器 (使用独立 C++ 库实现)，处理来自手机端 Web UI 的连接请求和命令消息，并将命令转发给动作执行器。同时负责生成本机 IP 和端口信息用于二维码。
-*   **动作执行器:** 接收来自通信服务器的指令，解析并执行对应的本地操作（如启动程序、模拟按键等）。
-*   **Windows API / 系统命令:** 动作执行器调用的底层接口，实现具体功能。
-*   **QR Code:** 显示包含服务器地址（IP:端口）的二维码，供手机扫描。
-*   **Web UI (手机端):** 运行在手机浏览器中的前端界面，显示按钮并发送点击事件到通信服务器。
+*   **UI Manager (`UIManager`):** 负责初始化和协调各个 UI 子窗口 (`UIWindows`)，管理整体 UI 布局 (DockSpace)，并传递状态信息。
+*   **Config Manager (`ConfigManager`):** 负责加载、保存和管理按钮布局及对应操作的配置信息 (JSON 文件)。
+*   **Action Executor (`ActionExecutor`):** 接收来自通信服务器或 UI 的指令，解析并执行对应的本地操作。使用 `InputUtils` 执行特定输入。
+*   **CommServer (`CommServer`):** 内嵌服务器，负责：
+    *   **WebSocket 通信:** 处理与手机 Web UI 的实时双向消息传递，转发按钮按下事件给 `ActionExecutor`。
+    *   **(可选) HTTP 服务:** 托管 Web UI 所需的静态文件 (`index.html`, `css/`, `js/`)。
+*   **UIWindows (Namespace/Directory):** 包含各个独立的 ImGui 窗口类：
+    *   `UIButtonGridWindow`: 显示可交互的按钮网格。
+    *   `UIConfigurationWindow`: 提供添加、编辑、删除按钮配置的界面。
+    *   `UIStatusLogWindow`: 显示服务器状态、IP 地址和日志信息。
+    *   `UIQrCodeWindow`: 显示用于手机连接的二维码。
+*   **Utils (Namespace/Directory):** 包含各种辅助功能类：
+    *   `NetworkUtils`: 获取本地 IP 地址。
+    *   `InputUtils`: 模拟按键/热键、媒体键、音量控制等。
+    *   `TextureLoader`: 加载和缓存静态图片纹理。
+    *   `GifLoader`: 加载和管理 GIF 动画帧。
+*   **Windows API:** `ActionExecutor` 和 `InputUtils` 调用的底层接口。
+*   **Web UI (手机端):** 运行在手机浏览器中的前端界面 (`web/` 目录下)。通过 HTTP 从 `CommServer` 获取资源，通过 WebSocket 与 `CommServer` 通信。
 *   **局域网:** 连接电脑和手机的网络环境。
 
 ## 3. 核心组件详述 (Core Components)
 
 ### 3.1. 桌面端应用程序 (Backend/Server - C++)
 
-#### 3.1.1. 主应用程序 (`WebStreamDeckApp`)
-*   **框架:** ImGui (需要结合后端，如 GLFW, SDL 或直接使用 Win32)。
+#### 3.1.1. 主程序 (`main.cpp`)
+*   **框架:** GLFW + GLEW + ImGui (Docking Branch)。
 *   **职责:**
-    *   初始化应用程序环境 (包括窗口、图形上下文、ImGui 上下文)。
-    *   创建并管理配置管理器、通信服务器和动作执行器实例。
-    *   运行主事件循环，处理用户输入和渲染 ImGui 界面。
-    *   处理应用程序生命周期事件。
+    *   初始化 GLFW 窗口和 OpenGL 上下文。
+    *   初始化 GLEW。
+    *   初始化 ImGui 上下文及后端绑定。
+    *   加载字体 (支持中文)。
+    *   创建并管理核心对象: `ConfigManager`, `TranslationManager`, `ActionExecutor`, `CommServer`, `UIManager`。
+    *   设置 `CommServer` 的消息处理器，将按钮事件转发给 `ActionExecutor`。
+    *   运行主事件循环 (`while (!glfwWindowShouldClose)`):
+        *   处理 GLFW 事件。
+        *   调用 `ActionExecutor::processPendingActions()` 处理后台动作。
+        *   更新 `UIManager` 中的服务器状态。
+        *   渲染 ImGui 帧 (`UIManager::drawUI()`)。
+        *   处理 ImGui 平台窗口 (如果启用)。
+        *   交换缓冲区。
+    *   在退出前进行清理 (停止服务器、释放 ImGui/GLFW 资源、调用 `TextureLoader::ReleaseStaticTextures()` 等)。
 
 #### 3.1.2. 配置管理模块 (`ConfigManager`)
-*   **实现:** C++ 类。
-*   **职责:**
-    *   定义按钮布局和动作的数据结构 (例如，使用 `struct` 或类)。
-    *   提供加载配置文件的接口 (如 `loadConfig(filePath)`)。
-    *   提供保存配置文件的接口 (如 `saveConfig(filePath)`)。
-    *   提供获取当前配置数据的接口 (供 UI 和动作执行器使用)。
-    *   **存储格式:** JSON (使用独立的 C++ JSON 库，如 nlohmann/json 进行解析和生成)。配置文件可存储按钮 ID、名称、图标路径/数据、动作类型、动作参数等。
+*   **实现:** `src/ConfigManager.hpp`, `src/ConfigManager.cpp`。
+*   **职责:** (同前) 定义按钮数据结构、加载/保存 JSON 配置、提供配置访问接口。
+*   **依赖:** `nlohmann-json`。
 
 #### 3.1.3. 用户界面模块 (`UIManager`)
-*   **框架:** ImGui。
+*   **实现:** `src/UIManager.hpp`, `src/UIManager.cpp`。
 *   **职责:**
-    *   **按钮配置界面:**
-        *   在 ImGui 窗口中 (`ImGui::Begin`/`End`) 绘制按钮网格。
-        *   使用 ImGui 控件 (按钮、文本框等) 允许用户添加、删除、编辑按钮。
-        *   为每个按钮设置：名称、图标 (可选，加载图片文件，使用 `ImGui::Image` 显示)、动作类型 (启动程序、快捷键、脚本、URL等)、动作参数 (程序路径、键序列、脚本路径、网址等)。
-        *   调用 `ConfigManager` 保存更改。
-    *   **主界面窗口:**
-        *   使用 `ImGui::Text` 等显示当前状态 (服务器是否运行、连接的客户端数量等)。
-        *   显示二维码 (使用 QR Code 生成库生成图片数据，加载为纹理并通过 `ImGui::Image` 显示)。
-        *   提供启动/停止服务器的控件 (`ImGui::Button`)。
-        *   使用 ImGui 的文本控件或日志窗口显示日志信息 (可选)。
+    *   持有并初始化各个 `UIWindows` 子窗口实例 (`UIButtonGridWindow` 等) 和 `Utils` 实例 (如果需要)。
+    *   持有核心管理器引用 (`ConfigManager`, `ActionExecutor`, `TranslationManager`) 并传递给需要的子窗口。
+    *   管理服务器状态变量 (`m_isServerRunning`, `m_serverPort`, `m_serverIP`)。
+    *   提供 `setServerStatus` 接口供 `main` 更新状态。
+    *   在 `drawUI` 方法中：
+        *   创建 ImGui DockSpace。
+        *   调用各个子窗口的 `Draw` 方法，并传递所需的状态信息和回调 (例如传递 IP 获取函数给状态和 QR 窗口)。
+    *   在析构函数中**不**再负责释放全局静态纹理（已移至 `main.cpp`）。
 
-#### 3.1.4. 通信服务模块 (`CommServer`)
-*   **框架:** 独立的 C++ WebSocket 库 (如 Boost.Asio, uWebSockets, cpp-websocket)。
-*   **实现:** C++ 类。
+#### 3.1.4. UI 窗口模块 (`src/UIWindows/`)
+*   **`UIButtonGridWindow`**:
+    *   显示按钮网格，按钮支持静态图片 (由 `TextureLoader` 加载) 和 GIF 动画 (由 `GifLoader` 加载)。
+    *   管理 GIF 动画状态和纹理缓存 (`m_animatedGifTextures`)，并在析构时释放 GIF 纹理。
+    *   处理按钮点击事件，调用 `ActionExecutor::requestAction`。
+    *   依赖: `ConfigManager`, `ActionExecutor`, `TranslationManager`, `GifLoader`, `TextureLoader`。
+*   **`UIConfigurationWindow`**:
+    *   显示已配置按钮列表。
+    *   提供表单用于添加/编辑按钮（ID, 名称, 类型, 参数, 图标路径）。
+    *   支持 `hotkey` 类型的按键捕捉 (`InputUtils::TryCaptureHotkey`) 和手动输入切换。
+    *   支持 `launch_app` 和图标路径的文件浏览 (使用 `ImGuiFileDialog`)。
+    *   处理编辑、保存、删除逻辑，调用 `ConfigManager` 更新配置并保存。
+    *   依赖: `ConfigManager`, `TranslationManager`, `InputUtils`, `ImGuiFileDialog`。
+*   **`UIStatusLogWindow`**:
+    *   显示服务器运行状态、IP 地址、端口。
+    *   提供刷新 IP 按钮 (通过回调调用 `NetworkUtils::GetLocalIPv4`)。
+    *   (TODO) 显示应用程序日志。
+    *   提供语言切换下拉框，调用 `TranslationManager::setLanguage`。
+    *   依赖: `TranslationManager`, `NetworkUtils` (通过回调间接)。
+*   **`UIQrCodeWindow`**:
+    *   根据服务器状态和有效 IP 地址生成并显示二维码 (使用 `qrcodegen` 和自定义的 `qrCodeToTextureHelper`)。
+    *   管理 QR Code 纹理 (`m_qrTextureId`)，并在需要时或析构时释放。
+    *   提供复制 Web 地址按钮。
+    *   依赖: `TranslationManager`, `qrcodegen`, `NetworkUtils` (通过状态间接)。
+
+#### 3.1.5. 工具模块 (`src/Utils/`)
+*   **`NetworkUtils`**: 提供 `GetLocalIPv4` 函数获取本机 IPv4 地址 (使用 Windows IP Helper API)。
+*   **`InputUtils`**: 提供模拟键盘输入 (`SendInput`)、捕获热键、模拟媒体键、控制系统音量 (使用 Windows Core Audio API) 的功能。
+*   **`TextureLoader`**: 提供 `LoadTexture` 函数加载静态图片文件 (使用 `stb_image`)，并维护一个全局静态纹理缓存 (`g_staticTextureCache`)。提供 `ReleaseStaticTextures` 用于程序退出时释放缓存。
+*   **`GifLoader`**: 提供 `LoadAnimatedGifFromFile` 函数加载 GIF 文件 (使用 `giflib`)，将其解码为 OpenGL 纹理序列及帧延迟信息，存储在 `AnimatedGif` 结构中。
+
+#### 3.1.6. 通信服务模块 (`CommServer`)
+*   **实现:** `src/CommServer.hpp`, `src/CommServer.cpp`。
+*   **框架:** `unofficial-uwebsockets` (通过 vcpkg 安装)。
 *   **职责:**
-    *   初始化 WebSocket 服务器并监听指定端口。
-    *   处理新的 WebSocket 连接请求。
-    *   管理已连接的客户端 (根据所选库的数据结构)。
-    *   处理客户端断开连接事件。
-    *   接收来自客户端的消息 (通过库提供的回调或事件处理)。
-    *   **消息协议:** 定义简单的 JSON 格式消息 (同前)。
-    *   解析收到的 `button_press` 消息，提取 `button_id` (使用 JSON 库)。
-    *   将有效的 `button_id` 通过回调、函数指针或直接调用传递给 `ActionExecutor`。
-    *   获取本机局域网 IP 地址 (使用平台 API 或相关库)。
-    *   生成包含 `ws://[IP]:[Port]` 信息的字符串，供 UI 生成二维码。
+    *   初始化 uWebSockets App，同时处理 WebSocket 和 HTTP 请求。
+    *   **WebSocket:**
+        *   监听指定端口，管理 WebSocket 连接和生命周期。
+        *   提供 `set_message_handler` 接口设置消息处理回调。
+        *   在消息回调中解析 JSON (使用 `nlohmann-json`)，查找 `button_press` 类型，提取 `button_id` 并调用 `ActionExecutor::requestAction`。
+        *   在连接建立时向客户端发送初始按钮配置 (`initial_config`)。
+    *   **HTTP:**
+        *   处理 GET 请求，根据 URL 映射到 `WEB_ROOT` (服务 `web/` 目录下的 HTML/CSS/JS 文件) 或 `ASSETS_ICONS_ROOT` (服务 `assets/icons/` 目录下的图标文件)。
+        *   读取文件内容并根据 MIME 类型返回响应。
+    *   提供 `start()` 和 `stop()` 方法控制服务器线程。
+    *   依赖: `uwebsockets`, `nlohmann-json`, `ActionExecutor`, `ConfigManager`, `filesystem`。
 
-#### 3.1.5. 动作执行模块 (`ActionExecutor`)
-*   **实现:** C++ 类。
+#### 3.1.7. 动作执行模块 (`ActionExecutor`)
+*   **实现:** `src/ActionExecutor.hpp`, `src/ActionExecutor.cpp`。
 *   **职责:**
-    *   提供一个公共接口 (例如 `executeAction(buttonId)`) 被 `CommServer` 调用。
-    *   根据 `buttonId` 从 `ConfigManager` 获取对应的动作配置。
-    *   根据动作类型执行操作：
-        *   **启动程序:** 使用标准库 (`std::system`) 或 Windows API `CreateProcess()` / `ShellExecute()`.
-        *   **模拟按键/热键:** 使用 Windows API `SendInput()`. 需要仔细处理按键代码和组合键。
-        *   **运行脚本:** 使用 `std::system` 或 `CreateProcess` 执行 `cmd.exe /c script.bat` 或 `powershell.exe -File script.ps1`。
-        *   **打开 URL:** 使用 `ShellExecute()` (Windows)。
-        *   **系统命令:** (如音量控制) 调用相应的 Windows API (如 Core Audio APIs)。
-    *   处理执行过程中的错误，并提供反馈 (例如通过日志)。
+    *   提供 `requestAction(buttonId)` 将动作请求加入线程安全队列。
+    *   提供 `processPendingActions()` (在主线程调用) 处理队列中的请求。
+    *   根据 `buttonId` 从 `ConfigManager` 获取配置。
+    *   根据动作类型执行操作 (启动程序、打开 URL 使用 `ShellExecute`；热键、媒体键、音量控制使用 `InputUtils`)。
+    *   依赖: `ConfigManager`, `InputUtils`。
 
-### 3.2. 手机端 Web 界面 (Frontend - HTML/CSS/JS)
+#### 3.1.8. 国际化模块 (`TranslationManager`)
+*   **实现:** `src/TranslationManager.hpp`, `src/TranslationManager.cpp`。
+*   **职责:** 加载指定语言的 JSON 文件 (`assets/lang/*.json`)，提供 `get(key)` 方法获取翻译文本，支持语言切换。
+*   **依赖:** `nlohmann-json`。
 
-*   **技术:** HTML5, CSS3, JavaScript (ES6+). 可选用轻量级框架/库如 Vue.js, React, Preact 或原生 JS。
-*   **职责:**
-    *   **连接:** 页面加载后，使用 JavaScript 的 `WebSocket` API 连接到桌面端 `CommServer` 提供的 `ws://[IP]:[Port]` 地址 (地址通过扫描二维码获取或手动输入)。
-    *   **界面渲染:**
-        *   建立连接后，可以向服务器请求按钮配置 (如果服务器实现了该功能)，或者配置是固定的/嵌入在 HTML 中的。
-        *   根据配置动态生成按钮网格。显示按钮名称或图标。
-    *   **交互:**
-        *   为每个按钮绑定触摸/点击事件监听器。
-        *   当按钮被点击时，获取其对应的 `button_id`。
-        *   通过 WebSocket 发送 JSON 消息 `{ "type": "button_press", "payload": { "button_id": "..." } }` 给服务器。
-    *   **状态显示:** 显示连接状态 (连接中、已连接、已断开)。处理重连逻辑。
-*   **部署:** 这些 HTML/CSS/JS 文件可以由桌面端的 `CommServer` 静态托管 (简单场景下可以硬编码在一个 C++ 字符串里，或者使用 Qt 资源系统 `.qrc` 编译进去，通过简单的 HTTP 响应发送)，或者由 `CommServer` 告知用户文件路径让用户自行在手机浏览器打开 (如果文件放在共享目录)。最方便的方式是 C++ 程序内嵌一个最简单的 HTTP 服务器来提供这些文件。
+### 3.2. 手机端 Web 界面 (Frontend - `web/`)
+*   **文件:** `index.html`, `css/style.css`, `js/main.js`。
+*   **技术:** 原生 HTML, CSS, JavaScript。
+*   **职责:** (同前) 连接 WebSocket，接收配置 (或使用硬编码/简单布局)，显示按钮，发送 `button_press` 消息，显示状态。
 
 ### 3.3. 通信协议 (WebSocket API)
-
-*   **格式:** JSON
-*   **主要消息:**
-    *   **客户端 -> 服务器:**
-        ```json
-        {
-          "type": "button_press",
-          "payload": {
-            "button_id": "string" // 按下按钮的唯一标识符
-          }
-        }
-        ```
-    *   **服务器 -> 客户端 (可选):**
-        ```json
-        {
-          "type": "config_update", // 或 "initial_config"
-          "payload": {
-            "layout": [ // 按钮布局数组
-              { "id": "btn1", "name": "记事本", "icon": "notepad.png" },
-              { "id": "btn2", "name": "音量+", "icon": "vol_up.svg" }
-              // ... 其他按钮
-            ]
-          }
-        }
-        ```
-        ```json
-        {
-          "type": "status",
-          "payload": {
-            "message": "Connected", // 或 "Error: Action failed"
-            "connected_clients": 1
-          }
-        }
-        ```
+*   (同前)
 
 ## 4. 技术选型总结 (Technology Stack Summary)
 
-*   **语言:** C++ (推荐 C++17 或更高版本)
-*   **核心框架:** ImGui
-*   **网络通信:** 独立 C++ WebSocket 库 (e.g., `websocketpp`, `uwebsockets`)
-*   **系统交互:** Windows API (Win32)
-*   **配置文件格式:** JSON (e.g., `nlohmann-json`)
-*   **QR Code 生成:** `qrcodegen` C++ library
+*   **语言:** C++20
+*   **UI 框架:** ImGui (Docking Branch from `third_party/`)
+*   **窗口/输入/OpenGL上下文:** GLFW (via vcpkg)
+*   **OpenGL 加载:** GLEW (via vcpkg)
+*   **WebSocket 服务器:** uWebSockets (via vcpkg: `unofficial-uwebsockets`)
+*   **JSON 处理:** nlohmann-json (via vcpkg)
+*   **QR Code 生成:** qrcodegen (from `third_party/`)
+*   **静态图像加载:** stb_image (via vcpkg: `stb`)
+*   **GIF 图像加载:** giflib (via vcpkg)
+*   **系统交互:** Windows API (Win32, Core Audio)
 *   **依赖管理:** vcpkg
-*   **构建系统:** CMake (与 vcpkg 集成)
-*   **IDE:** Visual Studio 2022
+*   **构建系统:** CMake
+*   **IDE (推荐):** Visual Studio 2022
 
 ## 5. 数据流示例 (Data Flow Examples)
-
-### 5.1. 启动与连接
-1.  用户启动桌面 C++ 程序。
-2.  `ConfigManager` 加载 `config.json`。
-3.  `MainWindow` 显示 UI，从 `ConfigManager` 获取配置在界面展示。
-4.  `CommServer` 启动 WebSocket 服务器，监听端口，获取本机 IP。
-5.  `MainWindow` 获取 IP 和端口，生成二维码并显示。
-6.  用户在手机浏览器扫描二维码，获取 `ws://IP:Port`。
-7.  手机 JS 尝试建立 WebSocket 连接。
-8.  `CommServer` 接受连接，记录客户端。
-9.  (可选) `CommServer` 发送初始配置给手机端。
-10. 手机端收到配置，渲染按钮界面。
-
-### 5.2. 触发动作
-1.  用户在手机 Web UI 上点击一个按钮 (例如 "启动记事本")。
-2.  手机 JS 获取按钮 ID ("notepad_button")。
-3.  手机 JS 通过 WebSocket 发送: `{ "type": "button_press", "payload": { "button_id": "notepad_button" } }`。
-4.  `CommServer` 接收消息，解析出 `button_id`。
-5.  `CommServer` 调用 `ActionExecutor::executeAction("notepad_button")`。
-6.  `ActionExecutor` 从 `ConfigManager` 查询 "notepad_button" 对应的动作 (类型: "launch_app", 参数: "notepad.exe")。
-7.  `ActionExecutor` 调用 `CreateProcess("notepad.exe", ...)` 或 `ShellExecute(...)`。
-8.  Windows 启动记事本程序。
-9.  (可选) `ActionExecutor` 通过回调或状态变量告知 `CommServer` 执行成功/失败，`CommServer` 可将状态发回手机端。
+*   (基本同前，但 `MainWindow` 现为 `UIManager` 及子窗口，`executeAction` 被 `requestAction` 取代)
 
 ## 6. 关键实现要点 (Key Implementation Points)
-
-*   **WebSocket 协议的健壮性:** 需要处理 JSON 解析错误、无效消息类型、未知按钮 ID 等情况。
-*   **动作执行的安全性与稳定性:**
-    *   避免执行任意命令，只执行预配置的操作。
-    *   使用 `SendInput` 时需要正确处理焦点和权限问题。
-    *   对外部程序路径、脚本路径进行验证。
-    *   提供错误处理和日志记录。
-*   **配置文件结构设计:** 既要灵活支持不同类型的动作，又要易于解析和编辑 (使用选定的 JSON 库)。
-*   **QR Code 生成与显示:** 集成 QR Code 库，生成图像数据，加载为纹理并在 ImGui 中使用 `ImGui::Image` 显示。
-*   **网络发现:** 正确获取本机在局域网中的 IP 地址，需要处理多网卡的情况（通常选择连接到默认网关的那个）。告知用户手机和电脑需在同一局域网。
-*   **错误处理与日志:** 在网络通信、文件读写、动作执行等关键环节添加详细的错误处理和日志输出，便于调试。
-*   **线程:** 网络服务器和可能的长时间动作执行应在不同的线程中运行，以避免阻塞 ImGui 的渲染循环。需要使用标准 C++ 线程 (`std::thread`) 或异步操作进行管理。
+*   (同前)
 
 ## 7. 潜在挑战与考虑 (Potential Challenges & Considerations)
-
-*   **UI 开发:** 使用 ImGui 创建复杂的布局和自定义样式可能与传统 GUI 框架不同，需要适应其即时模式的理念。
-*   **Windows API 复杂性:** 精确模拟按键、控制特定应用可能需要深入了解相关的 Windows API 和潜在的权限问题。
-*   **网络库集成:** 选择和集成合适的 WebSocket 库需要一些工作。
-*   **网络配置:** 用户端的防火墙可能会阻止连接，需要给出提示。
-*   **安全性:** 虽然主要在局域网内，但应避免配置可执行任意代码或访问敏感文件的动作。通信未加密 (WebSocket `ws://`)。如果需要加密，需使用 `wss://` 并处理证书。
-*   **跨平台:** ImGui 本身是跨平台的，但 `ActionExecutor` 中大量使用 Windows API 会限制其直接在 macOS/Linux 上运行，需要为其他平台编写特定的动作执行代码。后端库 (GLFW/SDL) 通常是跨平台的。
+*   (同前)
 
 ## 8. 部署 (Deployment)
 
 *   **依赖管理 (vcpkg):**
     *   确保已安装 [vcpkg](https://github.com/microsoft/vcpkg)。
-    *   使用 vcpkg 安装项目所需的依赖项。例如:
-        ```bash
-        vcpkg install imgui[core,glfw-binding,opengl3-binding] websocketpp nlohmann-json qrcodegen
-        ```
-        (注意: `glfw-binding` 和 `opengl3-binding` 是 ImGui 常用的后端和渲染器绑定，可根据实际选择替换。WebSocket 库也可以选用 `uwebsockets` 等其他库)。
-*   **构建配置 (CMake):**
-    *   使用 CMake 配置项目构建。
-    *   在配置 CMake 时，需要指定 vcpkg 的工具链文件，例如:
-        ```bash
-        cmake .. -DCMAKE_TOOLCHAIN_FILE=[vcpkg_root]/scripts/buildsystems/vcpkg.cmake
-        ```
-        (将 `[vcpkg_root]` 替换为你的 vcpkg 安装路径)。
-*   **编译与打包:**
-    *   编译生成可执行文件 (`.exe`)。
-    *   使用 Inno Setup, NSIS 或其他工具创建安装包，打包可执行文件、必要的运行时库 (vcpkg 会处理大部分依赖的链接，但可能需要包含特定的运行时 DLL)、配置文件模板、图标/图像资源。
-*   **用户须知:**
-    *   确保最终用户理解需要在同一局域网下使用，并可能需要配置防火墙。
+    *   项目使用 `vcpkg.json` 清单文件声明依赖项 (包括 `glfw3`, `nlohmann-json`, `unofficial-uwebsockets`, `glew`, `stb`, `giflib`)。
+    *   在 CMake 配置阶段 (例如运行 `build.bat` 时)，vcpkg 会自动查找并安装 `vcpkg.json` 中列出的依赖项。无需手动运行 `vcpkg install` 命令。
+    *   ImGui (包括 `ImGuiFileDialog`) 作为子模块或直接放在 `third_party/` 目录中，并在 CMake 中直接构建。
+    *   qrcodegen 库也放在 `third_party/` 目录中，并在 CMake 中直接构建。
+
+    *   `CMakeLists.txt` 包含了拷贝 `web`, `assets/lang`, `assets/fonts`, `assets/icons` 目录到构建输出目录的命令。
+*   **构建脚本 (`build.bat`):**
+    *   提供了一个简单的 Windows 批处理脚本用于自动化 CMake 配置和构建 (Release 模式)。
+    *   脚本会自动创建 `build` 目录，运行 CMake 配置 (依赖 vcpkg 工具链)，然后运行 CMake 构建。
+    *   请根据你的 vcpkg 安装路径修改 `build.bat` 文件顶部的 `VCPKG_TOOLCHAIN_FILE` 变量。
+    *   构建成功后会自动运行生成的可执行文件。
+*   **编译与打包:** (同前)
+*   **用户须知:** (同前)
+
+## 9. 未来计划 (Future Plans)
+
+以下是一些可能的未来开发方向和功能增强：
+
+*   **动态 Web UI:** 实现手机 Web 端动态加载和显示按钮布局，而不是依赖硬编码或手动配置。Web UI 应能从 `CommServer` 获取按钮配置信息。
+*   **更丰富的动作类型:**
+    *   增加对执行脚本文件 (如 `.bat`, `.ps1`) 的支持。
+    *   集成 OBS WebSocket 或其他直播软件控制。
+    *   支持更复杂的宏命令（例如带延迟的按键序列）。
+*   **UI/UX 改进:**
+    *   优化桌面端 UI 的视觉效果和用户体验。
+    *   实现拖放式按钮配置。
+    *   在状态窗口显示更详细的日志信息 (完成 TODO)。
+    *   保存和恢复 ImGui 窗口布局。
+*   **安全性增强:** 为 WebSocket 连接添加基础的认证机制，防止未经授权的连接。
+*   **跨平台支持:** 探索将应用移植到 macOS 或 Linux 的可能性，替换或抽象化 Windows API 依赖。
+*   **插件系统:** 设计一个插件架构，允许用户或第三方开发者添加自定义的动作类型。
