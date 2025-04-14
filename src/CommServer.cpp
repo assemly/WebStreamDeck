@@ -3,9 +3,65 @@
 #include <string_view> // For uWS message payload
 #include <chrono>    // For sleep
 #include <stdexcept> // For std::runtime_error (though not currently used)
+#include <fstream>      // For file reading
+#include <sstream>      // For reading file into string
+#include <filesystem>   // For path manipulation and checking file existence (C++17)
+#include <map>          // For MIME types
+#include "ConfigManager.hpp" // Make sure ConfigManager is included
 
-CommServer::CommServer() {
-    // Get the main event loop pointer for later defer operations
+// Define the root directory for web files relative to the executable
+// Adjust this path as needed
+const std::filesystem::path WEB_ROOT = "web";
+
+// Helper function to determine MIME type from file extension
+std::string getMimeType(const std::filesystem::path& path) {
+    std::string ext = path.extension().string();
+    static const std::map<std::string, std::string> mimeTypes = {
+        {".html", "text/html; charset=utf-8"},
+        {".htm", "text/html; charset=utf-8"},
+        {".css", "text/css; charset=utf-8"},
+        {".js", "application/javascript; charset=utf-8"},
+        {".png", "image/png"},
+        {".jpg", "image/jpeg"},
+        {".jpeg", "image/jpeg"},
+        {".gif", "image/gif"},
+        {".svg", "image/svg+xml"},
+        {".ico", "image/x-icon"}
+        // Add more types as needed
+    };
+    auto it = mimeTypes.find(ext);
+    if (it != mimeTypes.end()) {
+        return it->second;
+    }
+    return "application/octet-stream"; // Default binary type
+}
+
+// Helper function to read file content
+std::optional<std::string> readFile(const std::filesystem::path& path) {
+    // Security check: Ensure the path is within the web root
+    auto canonicalPath = std::filesystem::weakly_canonical(path);
+    auto webRootCanonical = std::filesystem::weakly_canonical(WEB_ROOT);
+    if (canonicalPath.string().find(webRootCanonical.string()) != 0) {
+         std::cerr << "Attempt to access file outside web root: " << path << std::endl;
+         return std::nullopt;
+     }
+
+    if (!std::filesystem::exists(canonicalPath) || !std::filesystem::is_regular_file(canonicalPath)) {
+        return std::nullopt;
+    }
+    std::ifstream file(canonicalPath, std::ios::binary);
+    if (!file.is_open()) {
+        return std::nullopt;
+    }
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    return buffer.str();
+}
+
+// Constructor now takes ConfigManager reference
+CommServer::CommServer(ConfigManager& configManager)
+    : m_configManager(configManager) // Initialize reference member
+{
     m_loop = uWS::Loop::get();
 }
 
@@ -13,12 +69,11 @@ CommServer::~CommServer() {
     stop(); // Ensure server is stopped on destruction
 }
 
-// Configure the uWebSockets application behavior
+// Configure the uWebSockets application behavior (WebSocket AND HTTP)
 void CommServer::configure_app(int port) {
-    // Create the App instance within the server thread
     m_app = std::make_unique<uWS::App>();
 
-    // Configure WebSocket behavior for any path ("/*")
+    // Configure WebSocket behavior
     m_app->ws<PerSocketData>("/*", {
         /* Settings */
         .compression = uWS::SHARED_COMPRESSOR,
@@ -26,32 +81,46 @@ void CommServer::configure_app(int port) {
         .idleTimeout = 600, // Timeout in seconds (e.g., 10 minutes)
 
         /* Handlers */
-        .open = [](uWS::WebSocket<false, true, PerSocketData> *ws) {
-            std::cout << "Client connected. Address: " << ws->getRemoteAddressAsText() << std::endl;
-            // Access user data via ws->getUserData() if needed
+        .open = [this](uWS::WebSocket<false, true, PerSocketData> *ws) {
+            std::cout << "[WS] Client connected. Address: " << ws->getRemoteAddressAsText() << std::endl;
+            
+            // --- Send initial configuration --- 
+            try {
+                const auto& buttons = m_configManager.getButtons();
+                json layout = json::array();
+                for (const auto& btn : buttons) {
+                    layout.push_back({{"id", btn.id}, {"name", btn.name}}); // Only send id and name for now
+                }
+                json configMsg = {
+                    {"type", "initial_config"},
+                    {"payload", {{"layout", layout}}}
+                };
+                ws->send(configMsg.dump(), uWS::OpCode::TEXT);
+                std::cout << "[WS] Sent initial config to client." << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "[WS] Error sending initial config: " << e.what() << std::endl;
+            }
+            // -------------------------------------
         },
         .message = [this](uWS::WebSocket<false, true, PerSocketData> *ws, std::string_view message, uWS::OpCode opCode) {
             if (opCode == uWS::OpCode::TEXT) {
-                std::cout << "Received message: " << message << std::endl;
+                std::cout << "[WS] Received message: " << message << std::endl;
                 if (m_message_handler) {
                     try {
-                        // Parse the message as JSON
                         json payload_json = json::parse(message);
-                        // Call the external message handler
                         m_message_handler(ws, payload_json, false);
                     }
                     catch (const json::parse_error& e) {
-                        std::cerr << "Failed to parse JSON message: " << e.what() << std::endl;
+                        std::cerr << "[WS] Failed to parse JSON message: " << e.what() << std::endl;
                         ws->send("{\"error\": \"Invalid JSON format\"}", uWS::OpCode::TEXT);
                     }
                      catch (const std::exception& e) {
-                        std::cerr << "Error processing message: " << e.what() << std::endl;
+                        std::cerr << "[WS] Error processing message: " << e.what() << std::endl;
                         ws->send("{\"error\": \"Internal server error\"}", uWS::OpCode::TEXT);
                     }
                 }
             } else if (opCode == uWS::OpCode::BINARY) {
-                std::cout << "Received binary message of size: " << message.length() << std::endl;
-                // Handle binary data if necessary
+                std::cout << "[WS] Received binary message of size: " << message.length() << std::endl;
             }
         },
         .drain = [](uWS::WebSocket<false, true, PerSocketData> *ws) {
@@ -64,19 +133,45 @@ void CommServer::configure_app(int port) {
             // Received pong from client
         },
         .close = [](uWS::WebSocket<false, true, PerSocketData> *ws, int code, std::string_view message) {
-             std::cout << "Client disconnected. Code: " << code << ", Message: " << message << std::endl;
+             std::cout << "[WS] Client disconnected. Code: " << code << ", Message: " << message << std::endl;
         }
     })
     .listen(port, [this, port](us_listen_socket_t *token) {
         // This callback runs when listening starts (or fails)
         if (token) {
-            std::cout << "WebSocket Server listening on port " << port << std::endl;
+            std::cout << "HTTP/WebSocket Server listening on port " << port << std::endl;
             m_listen_socket = token; // Store the listen socket
             m_running = true; // Set running state
         } else {
             std::cerr << "Failed to listen on port " << port << std::endl;
             m_running = false;
             m_should_stop = true; // Signal loop to stop if listen failed
+        }
+    });
+
+    // --- HTTP Configuration --- 
+    m_app->get("/*", [this](uWS::HttpResponse<false> *res, uWS::HttpRequest *req) {
+        std::string_view url = req->getUrl();
+        std::filesystem::path requestedPath = WEB_ROOT;
+
+        if (url == "/") {
+            requestedPath /= "index.html"; // Default to index.html for root
+        } else {
+            // Simple path mapping - remove leading slash if present
+            requestedPath /= (url[0] == '/' ? url.substr(1) : url);
+        }
+
+        std::cout << "[HTTP] Request for URL: " << url << " mapped to: " << requestedPath << std::endl;
+
+        auto fileContent = readFile(requestedPath);
+
+        if (fileContent) {
+            res->writeHeader("Content-Type", getMimeType(requestedPath));
+            res->end(*fileContent);
+        } else {
+            std::cerr << "[HTTP] File not found or access denied: " << requestedPath << std::endl;
+            res->writeStatus("404 Not Found");
+            res->end("File not found");
         }
     });
 }

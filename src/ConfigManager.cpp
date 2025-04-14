@@ -123,23 +123,55 @@ void ConfigManager::loadDefaultConfig()
     };
 }
 
-// --- Implementations for modifying methods if needed later ---
-/*
+// --- Implementations for modifying methods --- 
+// Uncomment and adjust addButton
 bool ConfigManager::addButton(const ButtonConfig& button)
 {
-    // Check for duplicate ID?
-    m_buttons.push_back(button);
-    return saveConfig(); // Save after adding
-}
-
-bool ConfigManager::updateButton(const std::string& id, const ButtonConfig& updatedButton)
-{
-    for (auto& button : m_buttons) {
-        if (button.id == id) {
-            button = updatedButton;
-            return saveConfig(); // Save after updating
+    // Basic validation: Check for empty ID or Name
+    if (button.id.empty() || button.name.empty()) {
+        std::cerr << "Error: Cannot add button with empty ID or Name." << std::endl;
+        return false;
+    }
+    // Check for duplicate ID
+    for (const auto& existingButton : m_buttons) {
+        if (existingButton.id == button.id) {
+             std::cerr << "Error: Button with ID '" << button.id << "' already exists." << std::endl;
+            return false;
         }
     }
+    m_buttons.push_back(button);
+    // return saveConfig(); // REMOVED: Do not save immediately
+    return true; // Indicate success
+}
+
+// Uncomment and adjust updateButton
+bool ConfigManager::updateButton(const std::string& id, const ButtonConfig& updatedButton)
+{
+    // Basic validation for updated button
+    if (updatedButton.name.empty()) {
+        std::cerr << "Error: Updated button name cannot be empty." << std::endl;
+        return false;
+    }
+    // ID check: Ensure the ID in the updatedButton matches the target id (optional but good practice)
+    if (updatedButton.id != id) {
+         std::cerr << "Error: Mismatched ID during update attempt (Target: " << id << ", Provided: " << updatedButton.id << "). ID cannot be changed." << std::endl;
+         return false;
+    }
+
+    for (auto& button : m_buttons) {
+        if (button.id == id) {
+            // Update fields (except ID)
+            button.name = updatedButton.name;
+            button.action_type = updatedButton.action_type;
+            button.action_param = updatedButton.action_param;
+            // button.icon_path = updatedButton.icon_path; // If using icons
+            
+            // REMOVED: Do not save immediately
+            // return saveConfig(); 
+            return true; // Indicate success
+        }
+    }
+    std::cerr << "Error: Button with ID '" << id << "' not found for update." << std::endl;
     return false; // Button not found
 }
 
@@ -149,8 +181,7 @@ bool ConfigManager::removeButton(const std::string& id)
                              [&id](const ButtonConfig& b){ return b.id == id; });
     if (it != m_buttons.end()) {
         m_buttons.erase(it, m_buttons.end());
-        return saveConfig(); // Save after removing
+        return true; // Indicate success
     }
     return false; // Button not found
-}
-*/ 
+} 

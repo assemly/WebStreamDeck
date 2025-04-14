@@ -1,0 +1,71 @@
+body {
+    font-family: sans-serif;
+    background-color: #282c34;
+    color: #abb2bf;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+h1 {
+    color: #61afef;
+    margin-bottom: 10px;
+}
+
+#connection-status {
+    margin-bottom: 20px;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-weight: bold;
+}
+
+.status-connecting {
+    background-color: #e5c07b; /* Yellow */
+    color: #282c34;
+}
+
+.status-connected {
+    background-color: #98c379; /* Green */
+    color: #282c34;
+}
+
+.status-disconnected,
+.status-error {
+    background-color: #e06c75; /* Red */
+    color: #282c34;
+}
+
+#button-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); /* Adjust number of columns as needed */
+    gap: 15px;
+    max-width: 400px; /* Limit width on larger screens */
+    width: 100%;
+}
+
+.grid-button {
+    background-color: #3a3f4b;
+    border: 1px solid #4b5263;
+    color: #abb2bf;
+    padding: 20px;
+    font-size: 1em;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: center;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+    min-height: 80px; /* Ensure buttons have a minimum height */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.grid-button:hover {
+    background-color: #4b5263;
+}
+
+.grid-button:active {
+    background-color: #61afef;
+    transform: scale(0.95);
+} 

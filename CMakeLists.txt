@@ -46,6 +46,7 @@ add_executable(${PROJECT_NAME}
     src/ConfigManager.cpp
     src/ActionExecutor.cpp
     src/CommServer.cpp   # Add the new CommServer source file
+    src/TranslationManager.cpp # Added TranslationManager source file
 )
 
 # Tell ImGui to use GLEW
@@ -61,6 +62,30 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     qrcodegen_lib         # Link the local qrcodegen library target
 )
 
+# Copy the web directory to the executable output directory after build
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/web # Source directory (project root/web)
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>/web # Destination directory (executable dir/web)
+    COMMENT "Copying web assets to output directory"
+)
+
+# Copy the lang directory from assets to the executable output directory after build
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/assets/lang # Source directory (project root/assets/lang)
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets/lang # Destination directory (executable dir/assets/lang)
+    COMMENT "Copying language assets to output directory"
+)
+
+# Copy the fonts directory from assets to the executable output directory after build
+# NOTE: Adjust the filename if you are using a different font
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different # Copy the entire directory
+        ${CMAKE_SOURCE_DIR}/assets/fonts # Source fonts directory
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets/fonts # Destination fonts directory
+    COMMENT "Copying font assets to output directory"
+)
 
 # Optional: Show console window on Windows alongside GUI (uses standard 'main' entry point)
 if(WIN32)

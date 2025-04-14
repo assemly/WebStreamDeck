@@ -4,6 +4,7 @@
 #include <string>
 #include "ConfigManager.hpp"
 #include "ActionExecutor.hpp"
+#include "TranslationManager.hpp"
 // Removed: #include <GL/gl.h> // GLuint is now defined via GLEW included in main.cpp or implicitly
 
 // Define GLuint manually if needed, or rely on it being included via other headers
@@ -17,7 +18,7 @@
 class UIManager
 {
 public:
-    explicit UIManager(ConfigManager& configManager, ActionExecutor& actionExecutor);
+    explicit UIManager(ConfigManager& configManager, ActionExecutor& actionExecutor, TranslationManager& translationManager);
     ~UIManager();
 
     void drawUI();
@@ -28,6 +29,7 @@ public:
 private:
     ConfigManager& m_configManager;
     ActionExecutor& m_actionExecutor;
+    TranslationManager& m_translator;
 
     // Server status variables
     bool m_isServerRunning = false;
@@ -51,4 +53,21 @@ private:
 
     // Add any UI state variables here if needed later
     // bool show_demo_window = false; 
+    std::string m_buttonIdToDelete = ""; // Store the ID of the button marked for deletion
+    bool m_showDeleteConfirmation = false; // Flag to control the visibility of the delete confirmation modal
+
+    // State for adding a new button
+    char m_newButtonId[128] = "";
+    char m_newButtonName[128] = "";
+    char m_newButtonActionType[128] = ""; // Consider using a dropdown later
+    char m_newButtonActionParam[256] = "";
+    // char m_newButtonIconPath[256] = ""; // Optional icon path
+
+    // State for editing an existing button
+    std::string m_editingButtonId = ""; // ID of the button being edited (read-only in UI)
+    char m_editButtonName[128] = "";
+    char m_editButtonActionType[128] = "";
+    char m_editButtonActionParam[256] = "";
+    // char m_editButtonIconPath[256] = ""; // Optional icon path
+    bool m_showEditModal = false; // Flag to control edit modal visibility
 }; 

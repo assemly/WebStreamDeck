@@ -47,7 +47,8 @@ echo Build completed successfully!
 
 rem Run the built executable
 echo Starting the application...
-start "" "%BUILD_CONFIG%\WebStreamDeck.exe"
+cd "%BUILD_CONFIG%"
+start "" "WebStreamDeck.exe"
 
 cd ..
 goto :eof
