@@ -53,8 +53,14 @@ add_executable(${PROJECT_NAME}
     src/ActionExecutor.cpp
     src/CommServer.cpp   # Add the new CommServer source file
     src/TranslationManager.cpp # Added TranslationManager source file
-    src/InputUtils.cpp # <<< ADDED
-    src/GifLoader.cpp # ADDED GifLoader source file
+    src/Utils/InputUtils.cpp # <<< ADDED
+    src/Utils/GifLoader.cpp # ADDED GifLoader source file
+    src/Utils/TextureLoader.cpp # <<< ADDED
+    src/UIWindows/UIButtonGridWindow.cpp # <<< ADDED
+    src/UIWindows/UIConfigurationWindow.cpp # <<< ADDED
+    src/UIWindows/UIStatusLogWindow.cpp # <<< ADDED
+    src/UIWindows/UIQrCodeWindow.cpp # <<< ADDED
+    src/Utils/NetworkUtils.cpp # <<< ADDED
 )
 
 # ADDED: Define NOMINMAX globally to prevent windows.h min/max macro conflicts

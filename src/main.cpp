@@ -16,7 +16,8 @@
 #include "ActionExecutor.hpp" // Include ActionExecutor header
 #include "CommServer.hpp" // Include CommServer header
 #include "TranslationManager.hpp" // Include TranslationManager header
-#include "InputUtils.hpp" // For audio control init/uninit
+#include "Utils/InputUtils.hpp" // For audio control init/uninit
+#include "Utils/TextureLoader.hpp" // <<< ADDED
 
 static void glfw_error_callback(int error, const char* description)
 {
@@ -211,6 +212,8 @@ int main(int, char**)
 #ifdef _WIN32
     InputUtils::UninitializeAudioControl();
 #endif
+
+    TextureLoader::ReleaseStaticTextures(); // <<< ADDED: Release global static textures before shutdown
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
