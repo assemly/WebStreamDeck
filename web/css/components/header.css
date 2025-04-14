@@ -1,0 +1,96 @@
+/* web/css/components/header.css */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background-color: #222;
+    box-sizing: border-box;
+}
+
+h1 {
+    color: #61afef;
+    margin: 0;
+}
+
+.fullscreen-title {
+    cursor: pointer;
+    transition: transform 0.2s, color 0.2s;
+    user-select: none;
+}
+
+.fullscreen-title:hover {
+    color: #7bc3ff;
+    transform: scale(1.05);
+}
+
+.fullscreen-title:active {
+    transform: scale(0.98);
+}
+
+#connection-status {
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-weight: bold;
+    margin-left: 15px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.status-connecting {
+    background-color: #e5c07b; /* Yellow */
+    color: #282c34;
+}
+
+.status-connected {
+    background-color: #98c379; /* Green */
+    color: #282c34;
+}
+
+.status-disconnected,
+.status-error {
+    background-color: #e06c75; /* Red */
+    color: #282c34;
+}
+
+/* Landscape header positioning */
+@media (orientation: landscape) and (max-height: 600px) {
+    header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        z-index: 100;
+        padding: 5px 10px;
+    }
+    header h1 {
+        font-size: 1em;
+    }
+    header #connection-status {
+        font-size: 0.8em;
+        padding: 3px 6px;
+        margin-left: 10px;
+        flex-shrink: 0;
+    }
+}
+
+/* --- Narrow Screen Adjustment (Portrait Phone) --- */
+@media (max-width: 420px) {
+    header {
+        flex-direction: column; /* Stack items vertically */
+        align-items: flex-start; /* Align items to the start (left) */
+        padding: 10px 15px; /* Adjust padding if needed */
+    }
+
+    header h1 {
+        margin-bottom: 5px; /* Add space below title */
+    }
+
+    header #connection-status {
+        margin-left: 0; /* Remove left margin */
+        margin-top: 5px;  /* Add top margin for spacing */
+         /* Ensure font size is reasonable */
+        font-size: 0.9em; 
+        padding: 4px 8px;
+    }
+} 

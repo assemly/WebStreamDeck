@@ -8,6 +8,7 @@
 #include <memory>
 #include <atomic>
 #include <optional> // For optional us_listen_socket_t
+#include "ConfigManager.hpp" // Include ConfigManager header
 
 // Use nlohmann/json
 using json = nlohmann::json;
@@ -22,7 +23,8 @@ using MessageHandler = std::function<void(uWS::WebSocket<false, true, PerSocketD
 
 class CommServer {
 public:
-    CommServer();
+    // Modify constructor to accept ConfigManager reference
+    explicit CommServer(ConfigManager& configManager);
     ~CommServer();
 
     // Start the server (synchronous call, but runs the event loop in a separate thread)
@@ -38,6 +40,7 @@ public:
     bool is_running() const;
 
 private:
+    ConfigManager& m_configManager; // Store reference to ConfigManager
     // uWebSockets application (event loop)
     // Needs to be a pointer because App is non-copyable/movable
     // and needs to be created/run within the server thread.
