@@ -11,11 +11,11 @@
 #include <memory> // For std::unique_ptr
 #include <iostream> // For std::cerr
 
-#include "UIManager.hpp" // Include the new UI Manager header
-#include "ConfigManager.hpp" // Include ConfigManager header
-#include "ActionExecutor.hpp" // Include ActionExecutor header
-#include "CommServer.hpp" // Include CommServer header
-#include "TranslationManager.hpp" // Include TranslationManager header
+#include "Managers/UIManager.hpp" // Include the new UI Manager header
+#include "Managers/ConfigManager.hpp" // Include ConfigManager header
+#include "Managers/ActionRequestManager.hpp" // <<< ADDED
+#include "Managers/NetworkManager.hpp" // <<< UPDATED PATH
+#include "Managers/TranslationManager.hpp" // Include TranslationManager header
 #include "Utils/InputUtils.hpp" // For audio control init/uninit
 #include "Utils/TextureLoader.hpp" // <<< ADDED
 
@@ -108,49 +108,51 @@ int main(int, char**)
     // Create Core Managers
     TranslationManager translationManager("assets/lang", "zh"); // Loads default lang (zh)
     ConfigManager configManager;
-    ActionExecutor actionExecutor(configManager);
-    UIManager uiManager(configManager, actionExecutor, translationManager);
+    
+    ActionRequestManager actionRequestManager(configManager); // <<< MODIFIED: Only needs ConfigManager now
+    
+    // UIManager might need ActionRequestManager if UI buttons directly request actions
+    // Let's assume for now UI calls requestAction directly, but it might need adjustment
+    UIManager uiManager(configManager, actionRequestManager, translationManager); // <<< MODIFIED: Pass ActionRequestManager
 
-    // Create Communication Server, passing ConfigManager
-    auto commServer = std::make_unique<CommServer>(configManager);
-    const int webSocketPort = 9002;
+    // Create the Network Manager, passing ConfigManager
+    // It internally creates HttpServer and WebSocketServer
+    auto networkManager = std::make_unique<NetworkManager>(configManager);
+    const int serverPort = 9002;
 
-    // Define the message handler lambda
-    commServer->set_message_handler(
-        [&actionExecutor](uWS::WebSocket<false, true, PerSocketData>* /*ws*/, const json& payload, bool /*isBinary*/) {
+    // Define the WebSocket message handler lambda
+    // It should now call actionRequestManager.requestAction
+    networkManager->set_websocket_message_handler(
+        [&actionRequestManager](const json& payload, bool /*isBinary*/) { // <<< MODIFIED: Capture actionRequestManager
             try {
-                // Check protocol: { "type": "button_press", "payload": { "button_id": "..." } }
                 if (payload.contains("type") && payload["type"].is_string() && payload["type"] == "button_press") {
                     if (payload.contains("payload") && payload["payload"].is_object()) {
                         const auto& buttonPayload = payload["payload"];
                         if (buttonPayload.contains("button_id") && buttonPayload["button_id"].is_string()) {
                             std::string buttonId = buttonPayload["button_id"].get<std::string>();
-                            std::cout << "Received button press for ID: " << buttonId << std::endl;
-                            // UPDATED: Call requestAction instead of executeAction
-                            actionExecutor.requestAction(buttonId);
+                            std::cout << "[WS Handler] Received button press for ID: " << buttonId << std::endl;
+                            actionRequestManager.requestAction(buttonId); // <<< MODIFIED: Call requestAction
                         } else {
-                            std::cerr << "Message handler: Missing or invalid 'button_id' in payload." << std::endl;
+                            std::cerr << "[WS Handler] Missing or invalid 'button_id' in payload." << std::endl;
                         }
                     } else {
-                        std::cerr << "Message handler: Missing or invalid 'payload' object." << std::endl;
+                        std::cerr << "[WS Handler] Missing or invalid 'payload' object." << std::endl;
                     }
                 } else {
-                    // Optional: Handle other message types or ignore
-                    std::cerr << "Message handler: Received unknown message type or format." << std::endl;
+                    std::cerr << "[WS Handler] Received unknown message type or format." << std::endl;
                 }
             } catch (const json::exception& e) {
-                std::cerr << "Message handler: JSON processing error: " << e.what() << std::endl;
+                std::cerr << "[WS Handler] JSON processing error: " << e.what() << std::endl;
             } catch (const std::exception& e) {
-                std::cerr << "Message handler: General error: " << e.what() << std::endl;
+                std::cerr << "[WS Handler] General error: " << e.what() << std::endl;
             }
         }
     );
 
-    // Start the server
-    if (!commServer->start(webSocketPort)) {
-        std::cerr << "!!!!!!!! FAILED TO START WEBSOCKET SERVER ON PORT " << webSocketPort << " !!!!!!!!" << std::endl;
-        // Decide how to handle failure - maybe exit, maybe continue without server?
-        // For now, just print error and continue.
+    // Start the network manager (which starts HTTP/WS server)
+    if (!networkManager->start(serverPort)) { // <<< MODIFIED: Use networkManager
+        std::cerr << "!!!!!!!! FAILED TO START NETWORK SERVICES ON PORT " << serverPort << " !!!!!!!!" << std::endl;
+        // Consider exiting if network services are critical
     }
 
     ImVec4 clear_color = ImVec4(0.1f, 0.1f, 0.1f, 1.00f);
@@ -168,11 +170,11 @@ int main(int, char**)
     {
         glfwPollEvents();
 
-        // ADDED: Process actions requested from other threads
-        actionExecutor.processPendingActions();
+        // Process actions requested from other threads via the request manager
+        actionRequestManager.processPendingActions(); // <<< MODIFIED: Call processPendingActions
 
-        // Update server status in UIManager
-        uiManager.setServerStatus(commServer->is_running(), webSocketPort);
+        // Update server status in UIManager using networkManager
+        uiManager.setServerStatus(networkManager->is_running(), serverPort); // <<< MODIFIED: Use networkManager
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -204,9 +206,9 @@ int main(int, char**)
     }
 
     // Cleanup
-    std::cout << "Stopping WebSocket server..." << std::endl;
-    commServer->stop(); // Stop the server thread before cleaning up ImGui/GLFW
-    std::cout << "WebSocket server stopped." << std::endl;
+    std::cout << "Stopping network services..." << std::endl;
+    networkManager->stop(); // <<< MODIFIED: Stop networkManager
+    std::cout << "Network services stopped." << std::endl;
 
     // Uninitialize Core Audio Control (Windows only)
 #ifdef _WIN32

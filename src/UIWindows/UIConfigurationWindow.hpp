@@ -4,8 +4,8 @@
 #include <string>
 #include <vector>
 #include <map> // Although not directly used, ImGuiFileDialog might need it indirectly? Keep for safety or remove later.
-#include "../ConfigManager.hpp"
-#include "../TranslationManager.hpp"
+#include "../Managers/ConfigManager.hpp"
+#include "../Managers/TranslationManager.hpp"
 #include "../Utils/InputUtils.hpp" // For hotkey capture
 
 // Forward declare ImGuiFileDialog if only pointers/references are used, or include header

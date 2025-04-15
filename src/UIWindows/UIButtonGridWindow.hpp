@@ -5,9 +5,9 @@
 #include <string>
 #include <map>
 #include <GL/glew.h> // For GLuint
-#include "../ConfigManager.hpp"
-#include "../ActionExecutor.hpp"
-#include "../TranslationManager.hpp"
+#include "../Managers/ConfigManager.hpp"
+#include "../Managers/TranslationManager.hpp"
+#include "../Managers/ActionRequestManager.hpp"
 #include "../Utils/GifLoader.hpp" // For AnimatedGif struct
 #include "../Utils/TextureLoader.hpp"
 
@@ -16,7 +16,7 @@
 
 class UIButtonGridWindow {
 public:
-    UIButtonGridWindow(ConfigManager& configManager, ActionExecutor& actionExecutor, TranslationManager& translationManager);
+    UIButtonGridWindow(ConfigManager& configManager, ActionRequestManager& actionRequestManager, TranslationManager& translationManager);
     ~UIButtonGridWindow(); // Destructor to manage resources if needed
 
     void Draw();
@@ -26,7 +26,7 @@ public:
 
 private:
     ConfigManager& m_configManager;
-    ActionExecutor& m_actionExecutor;
+    ActionRequestManager& m_actionRequestManager;
     TranslationManager& m_translator;
 
     // Texture management moved here from UIManager for icons used in this window

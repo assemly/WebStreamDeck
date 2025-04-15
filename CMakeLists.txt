@@ -47,20 +47,23 @@ target_include_directories(qrcodegen_lib PUBLIC third_party/QR-Code-generator-1.
 
 # Add the executable
 add_executable(${PROJECT_NAME}
+    src/Utils/InputUtils.cpp
+    src/Utils/GifLoader.cpp
+    src/Utils/NetworkUtils.cpp
+    src/Utils/TextureLoader.cpp
+    src/Services/ActionExecutionService.cpp
+    src/Services/HttpServer.cpp
+    src/Services/WebSocketServer.cpp
+    src/Managers/UIManager.cpp
+    src/Managers/ConfigManager.cpp
+    src/Managers/ActionRequestManager.cpp
+    src/Managers/NetworkManager.cpp
+    src/Managers/TranslationManager.cpp
+    src/UIWindows/UIButtonGridWindow.cpp
+    src/UIWindows/UIConfigurationWindow.cpp
+    src/UIWindows/UIStatusLogWindow.cpp
+    src/UIWindows/UIQrCodeWindow.cpp
     src/main.cpp
-    src/UIManager.cpp
-    src/ConfigManager.cpp
-    src/ActionExecutor.cpp
-    src/CommServer.cpp   # Add the new CommServer source file
-    src/TranslationManager.cpp # Added TranslationManager source file
-    src/Utils/InputUtils.cpp # <<< ADDED
-    src/Utils/GifLoader.cpp # ADDED GifLoader source file
-    src/Utils/TextureLoader.cpp # <<< ADDED
-    src/UIWindows/UIButtonGridWindow.cpp # <<< ADDED
-    src/UIWindows/UIConfigurationWindow.cpp # <<< ADDED
-    src/UIWindows/UIStatusLogWindow.cpp # <<< ADDED
-    src/UIWindows/UIQrCodeWindow.cpp # <<< ADDED
-    src/Utils/NetworkUtils.cpp # <<< ADDED
 )
 
 # ADDED: Define NOMINMAX globally to prevent windows.h min/max macro conflicts

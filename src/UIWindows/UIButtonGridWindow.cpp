@@ -1,9 +1,10 @@
 #include "UIButtonGridWindow.hpp"
+#include "../Managers/ActionRequestManager.hpp"
 #include <iostream> // For std::cerr, std::cout
 #include <algorithm> // For std::transform
 
-UIButtonGridWindow::UIButtonGridWindow(ConfigManager& configManager, ActionExecutor& actionExecutor, TranslationManager& translationManager)
-    : m_configManager(configManager), m_actionExecutor(actionExecutor), m_translator(translationManager) {}
+UIButtonGridWindow::UIButtonGridWindow(ConfigManager& configManager, ActionRequestManager& actionRequestManager, TranslationManager& translationManager)
+    : m_configManager(configManager), m_actionRequestManager(actionRequestManager), m_translator(translationManager) {}
 
 UIButtonGridWindow::~UIButtonGridWindow() {
     releaseAnimatedGifTextures();
@@ -13,7 +14,7 @@ void UIButtonGridWindow::releaseAnimatedGifTextures() {
     for (auto const& [path, gifData] : m_animatedGifTextures) {
         if (gifData.loaded) {
             glDeleteTextures(gifData.frameTextureIds.size(), gifData.frameTextureIds.data());
-             std::cout << "Deleted " << gifData.frameTextureIds.size() << " GIF textures (GridWindow) for: " << path << std::endl;
+             // std::cout << "Deleted " << gifData.frameTextureIds.size() << " GIF textures (GridWindow) for: " << path << std::endl;
         }
     }
     m_animatedGifTextures.clear();
@@ -39,7 +40,7 @@ void UIButtonGridWindow::DrawSingleButton(const ButtonConfig& button, double cur
                     it = m_animatedGifTextures.find(button.icon_path);
                 } else {
                      m_animatedGifTextures[button.icon_path] = {}; // Cache failure
-                    std::cerr << "Failed to load GIF (GridWindow) for button '" << button.id << "' from path: " << button.icon_path << std::endl;
+                    // std::cerr << "Failed to load GIF (GridWindow) for button '" << button.id << "' from path: " << button.icon_path << std::endl;
                 }
             }
 
@@ -70,13 +71,13 @@ void UIButtonGridWindow::DrawSingleButton(const ButtonConfig& button, double cur
     bool buttonClicked = false;
     ImVec2 sizeVec(buttonSize, buttonSize);
     if (useImageButton && textureID != 0) {
-         buttonClicked = ImGui::ImageButton(button.id.c_str(), // Use button.id as str_id for image button too
+         buttonClicked = ImGui::ImageButton(button.id.c_str(), 
                                             (ImTextureID)(intptr_t)textureID,
                                             sizeVec,
-                                            ImVec2(0, 0), // uv0
-                                            ImVec2(1, 1), // uv1
-                                            ImVec4(0,0,0,0), // bg_col
-                                            ImVec4(1,1,1,1)); // tint_col
+                                            ImVec2(0, 0), 
+                                            ImVec2(1, 1), 
+                                            ImVec4(0,0,0,0), 
+                                            ImVec4(1,1,1,1));
          if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("%s", button.name.c_str());
          }
@@ -84,12 +85,11 @@ void UIButtonGridWindow::DrawSingleButton(const ButtonConfig& button, double cur
         buttonClicked = ImGui::Button(button.name.c_str(), sizeVec);
     }
 
-    // Handle Click
+    // Handle Click - Use ActionRequestManager now
     if (buttonClicked) {
-         printf("Button '%s' (ID: %s) clicked! Action: %s(%s)\n",
-               button.name.c_str(), button.id.c_str(),
-               button.action_type.c_str(), button.action_param.c_str());
-        m_actionExecutor.requestAction(button.id);
+         printf("Button '%s' (ID: %s) clicked! Requesting action...\n",
+               button.name.c_str(), button.id.c_str());
+        m_actionRequestManager.requestAction(button.id);
     }
 
     ImGui::PopID();

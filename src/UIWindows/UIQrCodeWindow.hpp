@@ -5,7 +5,7 @@
 #include <functional> // For std::function
 #include <vector>     // For texture data
 #include <GL/glew.h>    // For GLuint, gl functions
-#include "../TranslationManager.hpp"
+#include "../Managers/TranslationManager.hpp"
 #include <qrcodegen.hpp> // For QR code generation
 
 class UIQrCodeWindow {

@@ -3,7 +3,7 @@
 #include <imgui.h>
 #include <string>
 #include <vector>
-#include "../TranslationManager.hpp"
+#include "../Managers/TranslationManager.hpp"
 
 // Forward declare UIManager to access updateLocalIP if needed, or pass necessary state/callbacks
 // class UIManager;
