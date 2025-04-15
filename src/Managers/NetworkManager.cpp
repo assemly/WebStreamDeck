@@ -7,7 +7,7 @@ NetworkManager::NetworkManager(ConfigManager& configManager)
     : m_webSocketServer(configManager) // Initialize WebSocketServer with ConfigManager
     // m_httpServer is default initialized
 {
-    m_loop = uWS::Loop::get(); // Get the event loop associated with this thread
+    // m_loop = uWS::Loop::get(); // REMOVED FROM HERE
 }
 
 NetworkManager::~NetworkManager() {
@@ -48,6 +48,8 @@ bool NetworkManager::start(int port) {
     m_server_thread = std::thread([this, port]() {
         // App and event loop must be created and run in the same thread
         configure_and_listen(port);
+        m_loop.store(uWS::Loop::get());
+        
         if (m_running) { // Only run loop if listening succeeded
             std::cout << "NetworkManager: Starting uWS event loop..." << std::endl;
             m_app->run(); // This blocks until the App stops
@@ -86,9 +88,16 @@ void NetworkManager::stop() {
     std::cout << "NetworkManager: Initiating stop..." << std::endl;
     m_should_stop = true;
 
+    // <<< ADDED: Signal WebSocket server to stop accepting new connections >>>
+    m_webSocketServer.signalShutdown();
+
+    // Force close existing WebSocket connections before stopping the loop
+    m_webSocketServer.closeAllConnections();
+
     // Request the loop to stop its operations via defer
-    if (m_loop && m_app) { 
-        m_loop->defer([this]() {
+    auto* current_loop = m_loop.load();
+    if (current_loop && m_app) { 
+        current_loop->defer([this]() {
             if (m_listen_socket) {
                 us_listen_socket_close(0, *m_listen_socket);
                 m_listen_socket.reset(); 

@@ -184,6 +184,13 @@ int main(int argc, char** argv)
     {
         glfwPollEvents();
 
+        // <<< ADDED: Log the window close flag status >>>
+        if (glfwWindowShouldClose(window)) {
+            std::cout << "[main loop] glfwWindowShouldClose detected as TRUE. Exiting loop soon." << std::endl;
+            // Optional: Force break for immediate testing if needed
+            // break; 
+        }
+
         // Process actions requested from other threads via the request manager
         actionRequestManager.processPendingActions(); // <<< MODIFIED: Call processPendingActions
 

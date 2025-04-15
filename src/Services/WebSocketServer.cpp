@@ -81,13 +81,25 @@ void WebSocketServer::sendInitialState(uWS::WebSocket<false, true, PerSocketData
 
 // Handler for new WebSocket connections
 void WebSocketServer::on_open(uWS::WebSocket<false, true, PerSocketData>* ws) {
+    if (m_is_shutting_down.load()) {
+        std::cout << "[WS Server] Rejecting new connection during shutdown." << std::endl;
+        ws->end(1001, "Server is shutting down"); // 1001 = Going Away
+        return;
+    }
+
     std::cout << "[WS Server] Client connected." << std::endl;
+    std::lock_guard<std::mutex> lock(m_clients_mutex);
     m_clients.push_back(ws);
     sendInitialState(ws); // Send current config immediately
 }
 
 // Handler for incoming WebSocket messages
 void WebSocketServer::on_message(uWS::WebSocket<false, true, PerSocketData>* ws, std::string_view message, uWS::OpCode opCode) {
+    if (m_is_shutting_down.load()) {
+        // std::cout << "[WS Server] Ignoring message during shutdown." << std::endl;
+        return; // Don't process messages during shutdown
+    }
+
     // std::cout << "[WS Server] Received message: " << message << std::endl;
 
     if (opCode == uWS::OpCode::TEXT) {
@@ -122,6 +134,7 @@ void WebSocketServer::on_message(uWS::WebSocket<false, true, PerSocketData>* ws,
 void WebSocketServer::on_close(uWS::WebSocket<false, true, PerSocketData>* ws, int code, std::string_view message) {
     std::cout << "[WS Server] Client disconnected. Code: " << code << ", Message: " << message << std::endl;
     // Remove the disconnected client from the list
+    std::lock_guard<std::mutex> lock(m_clients_mutex);
     m_clients.erase(std::remove(m_clients.begin(), m_clients.end(), ws), m_clients.end());
 }
 
@@ -193,4 +206,47 @@ void WebSocketServer::registerWebSocketHandlers(uWS::App* app) {
     });
 
      std::cout << "[WS Server] WebSocket handlers registered for path: " << NetworkConstants::WEBSOCKET_PATH << std::endl;
+}
+
+// <<< ADDED: Implementation to close all connections >>>
+void WebSocketServer::closeAllConnections() {
+    std::cout << "[WS Server] Closing all client connections..." << std::endl;
+    std::lock_guard<std::mutex> lock(m_clients_mutex); // Lock the mutex
+    // Iterate over a copy of the client pointers to avoid issues while modifying the vector
+    std::vector<uWS::WebSocket<false, true, PerSocketData>*> clientsToClose = m_clients;
+    
+    std::cout << "[WS Server] Found " << clientsToClose.size() << " clients to close." << std::endl;
+
+    for (uWS::WebSocket<false, true, PerSocketData>* ws : clientsToClose) {
+        if (ws) { // Check if pointer is valid
+             // Use ws->close() or ws->end() depending on uWS version/preference
+             // ws->close() sends a close frame and waits for ack (might delay)
+             // ws->end() forcefully closes (faster shutdown)
+             std::cout << "[WS Server] Forcefully closing connection for client." << std::endl;
+             try {
+                ws->end(1000, "Server shutting down"); // Use end() for faster shutdown
+             } catch (const std::exception& e) {
+                  std::cerr << "[WS Server] Exception while closing client connection: " << e.what() << std::endl;
+             } // Catch potential errors during close
+             
+             // We don't remove from m_clients here directly, as the 'close' handler
+             // should eventually trigger and handle the removal. 
+             // Forcing removal here could lead to double-free or iterator invalidation
+             // if the close handler runs concurrently.
+             // However, since we are shutting down, perhaps direct removal IS safer?
+             // Let's keep it relying on the close handler for now, but 'end' should 
+             // prevent the handler from doing much work.
+        }
+    }
+    // Clear the map after attempting to close all. This prevents the close handler
+    // from potentially trying to access freed memory if it runs after this function returns
+    // but before the server thread fully stops.
+    // m_clients.clear(); // Consider if clearing here is safer during shutdown
+    std::cout << "[WS Server] Finished closing client connections." << std::endl;
+}
+
+// <<< ADDED: Implementation for signalShutdown >>>
+void WebSocketServer::signalShutdown() {
+    m_is_shutting_down.store(true); // Set the atomic flag
+    std::cout << "[WS Server] Shutdown signaled." << std::endl;
 } 

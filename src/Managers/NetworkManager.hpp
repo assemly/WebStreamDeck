@@ -39,13 +39,13 @@ private:
 
     // uWebSockets application (event loop)
     std::unique_ptr<uWS::App> m_app;
-    uWS::Loop* m_loop = nullptr; // Pointer to the event loop
+    // Store listen socket optionally (if needed for shutdown)
+    std::optional<us_listen_socket_t*> m_listen_socket;
+    // <<< MODIFIED: Made m_loop atomic and initialized to nullptr >>>
+    std::atomic<uWS::Loop*> m_loop{nullptr};
     std::thread m_server_thread; // Thread for running the event loop
     std::atomic<bool> m_running{false}; // Is the server actively listening?
     std::atomic<bool> m_should_stop{false}; // Signal for the server thread to stop
-
-    // Listening socket (for closing)
-    std::optional<us_listen_socket_t*> m_listen_socket;
 
     // Configure the uWS::App with routes from both servers and start listening
     void configure_and_listen(int port);

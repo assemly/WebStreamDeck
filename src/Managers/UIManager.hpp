@@ -42,4 +42,10 @@ private:
     UILayoutSettingsWindow m_layoutSettingsWindow;
 
     NetworkManager& m_networkManager;
+    TranslationManager& m_translationManager;
+
+    bool m_firstFrame = true; // Flag for initial focus setting
+
+    // Configure the uWS::App with routes from both servers and start listening
+    void configure_and_listen(int port);
 }; 

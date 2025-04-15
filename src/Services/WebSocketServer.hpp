@@ -5,6 +5,8 @@
 #include <string>
 #include <functional>
 #include <vector>
+#include <mutex> // <<< ADDED: Include mutex header
+#include <atomic> // <<< ADDED: For atomic boolean
 #include "../Managers/ConfigManager.hpp" // Needs access to ConfigManager for initial config
 #include "../Constants/NetworkConstants.hpp" // <<< UPDATED PATH
 
@@ -37,11 +39,21 @@ public:
     // <<< ADDED: Method to broadcast the current state >>>
     void broadcastCurrentState();
 
+    // <<< ADDED: Method to broadcast a specific state >>>
+    void broadcastState(const std::string& stateJson);
+
+    // <<< ADDED: Method to forcefully close all client connections >>>
+    void closeAllConnections();
+
+    // <<< ADDED: Method to signal that shutdown has started >>>
+    void signalShutdown();
+
 private:
     ConfigManager& m_configManager; // Store reference to ConfigManager
     MessageHandler m_message_handler; // Store the external handler
-    // Use PerSocketData in the template for the clients vector
-    std::vector<uWS::WebSocket<false, true, PerSocketData>*> m_clients; // <<< ADDED: Keep track of connected clients
+    std::vector<uWS::WebSocket<false, true, PerSocketData>*> m_clients; // <<< Keeps track of connected clients
+    std::mutex m_clients_mutex; // <<< ADDED: Mutex to protect m_clients access
+    std::atomic<bool> m_is_shutting_down = false; // <<< ADDED: Shutdown flag
 
     // Helper to generate web icon path (extracted from old CommServer::configure_app)
     std::string getWebIconPath(const std::string& configuredPath);
