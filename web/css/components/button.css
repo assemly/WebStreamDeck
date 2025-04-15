@@ -23,7 +23,7 @@
     cursor: pointer;
     text-align: center;
     transition: background-color 0.2s ease, transform 0.1s ease;
-    min-height: 80px;
+    min-height:80px;
     flex-direction: column;
     overflow: hidden;
     display: flex; /* Use flex to help center the button inside */
@@ -67,6 +67,7 @@
     justify-content: center;  /* 水平居中 */
     align-items: center;      /* 垂直居中 */
   }
+
   
 /* Landscape Styles for Button Grid */
 @media (orientation: landscape) and (max-height: 600px) {
