@@ -11,6 +11,14 @@
 #include <memory> // For std::unique_ptr
 #include <iostream> // For std::cerr
 
+#ifdef _WIN32
+// Define WIN32_LEAN_AND_MEAN before including windows.h to exclude older Winsock APIs
+#define WIN32_LEAN_AND_MEAN
+// Include winsock2.h before windows.h to prevent redefinition errors
+#include <winsock2.h>
+#include <windows.h>
+#endif
+
 #include "Managers/UIManager.hpp" // Include the new UI Manager header
 #include "Managers/ConfigManager.hpp" // Include ConfigManager header
 #include "Managers/ActionRequestManager.hpp" // <<< ADDED
@@ -24,8 +32,14 @@ static void glfw_error_callback(int error, const char* description)
     fprintf(stderr, "GLFW Error %d: %s\n", error, description);
 }
 
-int main(int, char**)
+int main(int argc, char** argv)
 {
+    #ifdef _WIN32
+    // Set console output code page to UTF-8 on Windows
+    SetConsoleOutputCP(CP_UTF8); // CP_UTF8 is defined as 65001 in windows.h
+    SetConsoleCP(CP_UTF8);       // Also set the input code page if needed
+    #endif
+
     glfwSetErrorCallback(glfw_error_callback);
     if (!glfwInit()) return 1;
 

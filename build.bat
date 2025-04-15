@@ -2,7 +2,7 @@
 rem Set environment variables
 set VCPKG_TOOLCHAIN_FILE=C:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake
 set BUILD_DIR=build
-set BUILD_CONFIG=Release
+set BUILD_CONFIG=Debug
 
 echo Vcpkg Toolchain: %VCPKG_TOOLCHAIN_FILE%
 echo Build Directory: %BUILD_DIR%
@@ -46,6 +46,8 @@ if errorlevel 1 (
 echo Build completed successfully!
 
 rem Run the built executable
+rem cmd中支持中文
+chcp 65001
 echo Starting the application...
 cd "%BUILD_CONFIG%"
 start "" "WebStreamDeck.exe"

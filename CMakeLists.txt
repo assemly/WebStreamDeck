@@ -117,6 +117,13 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMENT "Copying icon assets to output directory"
 )
 
+# 为 MSVC 编译器设置源文件和执行字符集为 UTF-8
+if(MSVC)
+    target_compile_options(${PROJECT_NAME} PRIVATE 
+        "/utf-8"          # 告诉编译器源文件和执行字符集都为 UTF-8
+    )
+endif()
+
 # Optional: Show console window on Windows alongside GUI (uses standard 'main' entry point)
 if(WIN32)
     set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
