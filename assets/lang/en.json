@@ -69,5 +69,10 @@
     "action_type_media_play_pause_display": "Media: Play/Pause",
     "action_type_media_next_track_display": "Media: Next Track",
     "action_type_media_prev_track_display": "Media: Previous Track",
-    "action_type_media_stop_display": "Media: Stop"
+    "action_type_media_stop_display": "Media: Stop",
+    "clear_button_label": "Clear Button",
+    "place_existing_button_label": "Place Existing Button Here",
+    "select_button_popup_title": "Select Button to Place",
+    "select_button_popup_desc": "Select a button to place at Page %d, Row %d, Col %d:",
+    "filter_placeholder": "Filter by name or ID..."
 }

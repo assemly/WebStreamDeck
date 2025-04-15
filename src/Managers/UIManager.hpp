@@ -6,6 +6,7 @@
 #include "ConfigManager.hpp"
 #include "ActionRequestManager.hpp"
 #include "TranslationManager.hpp"
+#include "NetworkManager.hpp"
 #include "../UIWindows/UIButtonGridWindow.hpp"
 #include "../UIWindows/UIConfigurationWindow.hpp"
 #include "../UIWindows/UIStatusLogWindow.hpp"
@@ -15,13 +16,15 @@
 class UIManager
 {
 public:
-    explicit UIManager(ConfigManager& configManager, ActionRequestManager& actionRequestManager, TranslationManager& translationManager);
+    UIManager(ConfigManager& configManager, ActionRequestManager& actionRequestManager, TranslationManager& translationManager, NetworkManager& networkManager);
     ~UIManager();
 
     void drawUI();
 
     // Method to receive server status from main application
     void setServerStatus(bool isRunning, int port);
+
+    void notifyLayoutChanged();
 
 private:
 
@@ -35,4 +38,6 @@ private:
     UIConfigurationWindow m_configWindow;
     UIStatusLogWindow m_statusLogWindow;
     UIQrCodeWindow m_qrCodeWindow;
+
+    NetworkManager& m_networkManager;
 }; 

@@ -125,14 +125,35 @@ void WebSocketServer::on_close(uWS::WebSocket<false, true, PerSocketData>* ws, i
     m_clients.erase(std::remove(m_clients.begin(), m_clients.end(), ws), m_clients.end());
 }
 
-// Helper function to broadcast a message to all connected clients
+// Helper function to broadcast a generic message to all connected clients
 void WebSocketServer::broadcast(const std::string& message) {
-    // std::cout << "[WS Server] Broadcasting message: " << message << std::endl;
+    // std::cout << "[WS Server] Broadcasting generic message: " << message << std::endl;
     for (auto* client : m_clients) {
-        // Check if the socket is still valid/subscribed before sending
-        // Note: uWS doesn't provide a direct is_valid() check easily here.
-        // Proper pub/sub might be better for robust broadcasting.
         client->send(message, uWS::OpCode::TEXT);
+    }
+}
+
+// Helper function to broadcast the current config state
+void WebSocketServer::broadcastCurrentState() {
+    try {
+        // Prepare the payload exactly like in sendInitialState
+        const auto& buttons = m_configManager.getButtons();
+        const auto& layout = m_configManager.getLayoutConfig();
+        
+        json initialStateJson;
+        initialStateJson["type"] = "initial_state"; // Use the same message type
+        initialStateJson["payload"]["buttons"] = buttons;
+        initialStateJson["payload"]["layout"] = layout; // Use default serialization (array for pages)
+
+        std::string stateMessage = initialStateJson.dump();
+
+        std::cout << "[WS Server] Broadcasting current state to " << m_clients.size() << " client(s)." << std::endl;
+        broadcast(stateMessage); // Use the generic broadcast helper
+
+    } catch (const json::exception& e) {
+        std::cerr << "[WS Server] Error creating state JSON for broadcast: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "[WS Server] Error broadcasting state: " << e.what() << std::endl;
     }
 }
 

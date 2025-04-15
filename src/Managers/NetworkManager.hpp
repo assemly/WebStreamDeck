@@ -30,6 +30,9 @@ public:
     // Set the external message handler for WebSocket
     void set_websocket_message_handler(MessageHandler handler);
 
+    // <<< ADDED: Method to trigger WebSocket broadcast >>>
+    void broadcastWebSocketState();
+
 private:
     HttpServer m_httpServer; // Owns the HTTP server logic instance
     WebSocketServer m_webSocketServer; // Owns the WebSocket server logic instance

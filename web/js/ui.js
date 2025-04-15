@@ -118,8 +118,56 @@ const ui = (() => {
     // --- Portrait Grid Rendering ---
     function renderPortraitGrid() {
         console.log("UI: Rendering Portrait Grid (3 columns)");
-        const allButtons = Object.values(buttonsById); // Get all button data
-        const totalButtons = allButtons.length;
+        buttonGrid.innerHTML = ''; // Clear previous buttons
+
+        // --- MODIFIED: Collect buttons based on layout order across all pages ---
+        const buttonsToRender = [];
+        if (!currentLayout || !currentLayout.pages || !Array.isArray(currentLayout.pages)) { // Added Array check
+            console.error("UI: Layout pages data is missing or not an array for portrait rendering.");
+            return; // Exit if layout is not available or invalid
+        }
+        
+        // <<< MODIFIED: Correctly iterate over the array of [pageIndex, pageGrid] pairs >>>
+        // Sort the pages array based on the page index (first element of each pair)
+        const sortedPages = [...currentLayout.pages].sort((a, b) => a[0] - b[0]);
+
+        // Iterate through the sorted page entries
+        for (const pageEntry of sortedPages) {
+            const pageIndex = pageEntry[0]; // Optional: can use this in logs if needed
+            const pageLayout = pageEntry[1]; // Get the actual grid
+            if (!pageLayout) continue; // Skip if grid data is missing
+
+            for (let r = 0; r < pageLayout.length; r++) { // Iterate rows of the grid
+                const rowLayout = pageLayout[r];
+                if (!rowLayout) continue; // Skip if row data is missing
+
+                for (let c = 0; c < rowLayout.length; c++) { // Iterate columns of the row
+                    const buttonId = rowLayout[c]; // Get the button ID
+                    // Check if buttonId exists, is a string, and is not empty after trimming
+                    if (buttonId && typeof buttonId === 'string' && buttonId.trim() !== "") { 
+                        const buttonData = buttonsById[buttonId];
+                        if (buttonData) {
+                            buttonsToRender.push(buttonData); // Add the button data if found
+                        } else {
+                            console.warn(`UI: Button ID '${buttonId}' found in layout page ${pageIndex}, but not in button definitions.`);
+                        }
+                    }
+                }
+            }
+        }
+        // <<< END OF MODIFICATION >>>
+
+        console.log(`UI: Collected ${buttonsToRender.length} buttons from layout for portrait view.`);
+
+        if (buttonsToRender.length === 0) {
+            console.log("UI: No buttons found in layout to render for portrait view.");
+            buttonGrid.style.display = 'none'; // Hide grid if empty
+            return;
+        }
+
+        // const allButtons = Object.values(buttonsById); // Get all button data - OLD WAY
+        // const totalButtons = allButtons.length;       // OLD WAY
+        const totalButtons = buttonsToRender.length;   // NEW WAY
         const cols = 3;
         const rows = Math.ceil(totalButtons / cols);
 
@@ -128,16 +176,18 @@ const ui = (() => {
         buttonGrid.style.display = 'grid';
         buttonGrid.style.gridTemplateRows = `repeat(${rows}, auto)`; // Auto height for rows
         buttonGrid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+        buttonGrid.classList.remove('paged-grid'); // Ensure paged class is removed
         buttonGrid.classList.add('portrait-grid'); // Add specific class if needed
 
-        allButtons.forEach(buttonData => {
+        // --- MODIFIED: Iterate over buttonsToRender --- 
+        buttonsToRender.forEach(buttonData => {
             const cell = document.createElement('div');
             cell.className = 'grid-cell';
             const btnElement = createButtonElement(buttonData);
             cell.appendChild(btnElement);
             buttonGrid.appendChild(cell);
         });
-         console.log(`UI: Finished rendering portrait grid (${rows}x${cols})`);
+        console.log(`UI: Finished rendering portrait grid (${rows}x${cols})`);
     }
 
 

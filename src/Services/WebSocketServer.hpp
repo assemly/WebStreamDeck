@@ -34,6 +34,9 @@ public:
     // Set the external message handler callback
     void set_message_handler(MessageHandler handler);
 
+    // <<< ADDED: Method to broadcast the current state >>>
+    void broadcastCurrentState();
+
 private:
     ConfigManager& m_configManager; // Store reference to ConfigManager
     MessageHandler m_message_handler; // Store the external handler

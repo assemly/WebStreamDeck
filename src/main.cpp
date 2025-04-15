@@ -122,22 +122,22 @@ int main(int argc, char** argv)
     // Create Core Managers
     TranslationManager translationManager("assets/lang", "zh"); // Loads default lang (zh)
     ConfigManager configManager;
+    ActionRequestManager actionRequestManager(configManager); 
     
-    ActionRequestManager actionRequestManager(configManager); // <<< MODIFIED: Only needs ConfigManager now
-    
-    // UIManager might need ActionRequestManager if UI buttons directly request actions
-    // Let's assume for now UI calls requestAction directly, but it might need adjustment
-    UIManager uiManager(configManager, actionRequestManager, translationManager); // <<< MODIFIED: Pass ActionRequestManager
+    // Create NetworkManager FIRST
+    NetworkManager networkManager(configManager);
 
-    // Create the Network Manager, passing ConfigManager
+    // THEN Create UIManager, passing dependencies including NetworkManager
+    UIManager uiManager(configManager, actionRequestManager, translationManager, networkManager); 
+
+    // Create the Network Manager, passing ConfigManager (<<< REMOVE THIS DUPLICATE BLOCK)
     // It internally creates HttpServer and WebSocketServer
-    auto networkManager = std::make_unique<NetworkManager>(configManager);
+    // auto networkManager = std::make_unique<NetworkManager>(configManager); // <<< REMOVED
     const int serverPort = 9002;
 
-    // Define the WebSocket message handler lambda
-    // It should now call actionRequestManager.requestAction
-    networkManager->set_websocket_message_handler(
-        [&actionRequestManager](const json& payload, bool /*isBinary*/) { // <<< MODIFIED: Capture actionRequestManager
+    // Define the WebSocket message handler lambda via the existing networkManager instance
+    networkManager.set_websocket_message_handler(
+        [&actionRequestManager](const json& payload, bool /*isBinary*/) { 
             try {
                 if (payload.contains("type") && payload["type"].is_string() && payload["type"] == "button_press") {
                     if (payload.contains("payload") && payload["payload"].is_object()) {
@@ -164,7 +164,7 @@ int main(int argc, char** argv)
     );
 
     // Start the network manager (which starts HTTP/WS server)
-    if (!networkManager->start(serverPort)) { // <<< MODIFIED: Use networkManager
+    if (!networkManager.start(serverPort)) { // Use the existing networkManager instance
         std::cerr << "!!!!!!!! FAILED TO START NETWORK SERVICES ON PORT " << serverPort << " !!!!!!!!" << std::endl;
         // Consider exiting if network services are critical
     }
@@ -188,7 +188,7 @@ int main(int argc, char** argv)
         actionRequestManager.processPendingActions(); // <<< MODIFIED: Call processPendingActions
 
         // Update server status in UIManager using networkManager
-        uiManager.setServerStatus(networkManager->is_running(), serverPort); // <<< MODIFIED: Use networkManager
+        uiManager.setServerStatus(networkManager.is_running(), serverPort); // <<< MODIFIED: Use networkManager
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -221,7 +221,7 @@ int main(int argc, char** argv)
 
     // Cleanup
     std::cout << "Stopping network services..." << std::endl;
-    networkManager->stop(); // <<< MODIFIED: Stop networkManager
+    networkManager.stop(); // <<< MODIFIED: Stop networkManager
     std::cout << "Network services stopped." << std::endl;
 
     // Uninitialize Core Audio Control (Windows only)

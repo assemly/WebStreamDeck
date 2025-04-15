@@ -24,7 +24,6 @@
     text-align: center;
     transition: background-color 0.2s ease, transform 0.1s ease;
     min-height: 80px;
-    display: flex;
     flex-direction: column;
     overflow: hidden;
     display: flex; /* Use flex to help center the button inside */
@@ -32,8 +31,7 @@
     align-items: center;
     aspect-ratio: 1 / 1; /* Make the cell square */
     /* background-color: #444; */ /* Optional: Add background to debug layout */
-    overflow: hidden; /* Prevent content from spilling out */
-    /* Default: width/height determined by grid cell */
+
 }
 
 .grid-button:hover {

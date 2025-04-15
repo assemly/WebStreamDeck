@@ -4,6 +4,8 @@
 #include <filesystem> // For checking if file exists
 #include <stdexcept> // For std::out_of_range
 #include <algorithm> // For std::find_if, std::remove_if
+#include <optional> // For std::optional
+#include <tuple>   // For std::tuple
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
@@ -168,33 +170,17 @@ const LayoutConfig& ConfigManager::getLayoutConfig() const {
 
 // <<< ADDED: Implementation >>>
 std::string ConfigManager::getButtonIdAt(int page, int row, int col) const {
-    try {
-        // Check if page exists
-        auto page_it = m_layout.pages.find(page);
-        if (page_it == m_layout.pages.end()) {
-            // std::cerr << "Debug: Page " << page << " not found in layout map." << std::endl;
-            return ""; // Page doesn't exist
+    auto pageIt = m_layout.pages.find(page);
+    if (pageIt != m_layout.pages.end()) {
+        const auto& grid = pageIt->second;
+        if (row >= 0 && row < grid.size()) {
+            const auto& rowVec = grid[row];
+            if (col >= 0 && col < rowVec.size()) {
+                return rowVec[col];
+            }
         }
-        // Check row bounds using the actual size of the loaded page data
-        if (row < 0 || static_cast<size_t>(row) >= page_it->second.size()) {
-            // std::cerr << "Debug: Row " << row << " out of bounds for page " << page << " (size: " << page_it->second.size() << ")." << std::endl;
-            return ""; // Row out of bounds
-        }
-        // Check col bounds using the actual size of the loaded row data
-        if (col < 0 || static_cast<size_t>(col) >= page_it->second[row].size()) {
-             // std::cerr << "Debug: Col " << col << " out of bounds for page " << page << ", row " << row << " (size: " << page_it->second[row].size() << ")." << std::endl;
-            return ""; // Col out of bounds
-        }
-        // Return button ID (which might be an empty string if the slot is empty)
-        return page_it->second.at(row).at(col); // Use .at() for bounds checking within try-catch
-    } catch (const std::out_of_range& oor) {
-        // This catch might be redundant with the manual checks, but good as a fallback
-        std::cerr << "Error accessing layout position via std::out_of_range (page=" << page << ", row=" << row << ", col=" << col << "): " << oor.what() << std::endl;
-        return "";
-    } catch (const std::exception& e) {
-        std::cerr << "Unknown error in getButtonIdAt (page=" << page << ", row=" << row << ", col=" << col << "): " << e.what() << std::endl;
-        return "";
     }
+    return ""; // Return empty string if position is invalid or page not found
 }
 
 // --- Default Config ---
@@ -244,6 +230,15 @@ void ConfigManager::loadDefaultConfig()
     if (m_layout.rows_per_page > 1 && m_layout.cols_per_page > 3) m_layout.pages[0][1][3] = "BTN_ADD"; // Vol Up
     if (m_layout.rows_per_page > 1 && m_layout.cols_per_page > 4) m_layout.pages[0][1][4] = "btn";     // Vol Down (using ID 'btn')
     if (m_layout.rows_per_page > 2 && m_layout.cols_per_page > 2) m_layout.pages[0][2][2] = "btn_task_manager";
+
+    // Ensure page_count is set correctly (at least 1 if page 0 was populated)
+    if (m_layout.pages.empty()) {
+        m_layout.page_count = 0;
+    } else {
+        // For now, just set to 1 if page 0 exists. 
+        // A more robust approach would find the max page index used.
+        m_layout.page_count = 1; 
+    }
 }
 
 // --- Modifiers ---
@@ -415,6 +410,111 @@ bool ConfigManager::setButtonPosition(const std::string& buttonId, int page, int
 
 // <<< ADDED: Implementation >>>
 bool ConfigManager::clearButtonPosition(int page, int row, int col) {
-    // Simply call setButtonPosition with an empty ID
-    return setButtonPosition("", page, row, col);
+    auto pageIt = m_layout.pages.find(page);
+    if (pageIt != m_layout.pages.end()) {
+        auto& grid = pageIt->second;
+        if (row >= 0 && row < grid.size()) {
+            auto& rowVec = grid[row];
+            if (col >= 0 && col < rowVec.size()) {
+                if (!rowVec[col].empty()) { // Only save if something was actually cleared
+                    rowVec[col] = "";
+                    return saveConfig();
+                }
+                return true; // Position was already empty, technically success
+            }
+        }
+    }
+    std::cerr << "Error: Cannot clear button at invalid position (Page: " << page << ", Row: " << row << ", Col: " << col << ")" << std::endl;
+    return false;
+}
+
+// Finds the old position of a button and clears it.
+// Returns true if the button was found and cleared (regardless of save success), false otherwise.
+// Internal helper, does not save config.
+bool ConfigManager::findAndClearOldPosition(const std::string& buttonId) {
+    for (auto& page_pair : m_layout.pages) {
+        for (auto& row_vec : page_pair.second) {
+            for (auto& cell_id : row_vec) {
+                if (cell_id == buttonId) {
+                    cell_id = ""; // Clear the old position
+                    return true; // Found and cleared
+                }
+            }
+        }
+    }
+    return false; // Button not found in layout
+}
+
+// <<< ADDED: Implementation for findButtonPosition >>>
+std::optional<std::tuple<int, int, int>> ConfigManager::findButtonPosition(const std::string& buttonId) const {
+    if (buttonId.empty()) {
+        return std::nullopt;
+    }
+    for (const auto& page_pair : m_layout.pages) {
+        int page = page_pair.first;
+        const auto& grid = page_pair.second;
+        for (int r = 0; r < grid.size(); ++r) {
+             // Ensure row size matches configured cols for safety, although layout should be consistent
+            if (r < m_layout.rows_per_page && grid[r].size() == m_layout.cols_per_page) { 
+                for (int c = 0; c < grid[r].size(); ++c) {
+                    if (grid[r][c] == buttonId) {
+                        return std::make_tuple(page, r, c);
+                    }
+                }
+            }
+        }
+    }
+    return std::nullopt; // Not found
+}
+
+// <<< ADDED: Implementation for swapButtons >>>
+bool ConfigManager::swapButtons(const std::string& buttonId1, const std::string& buttonId2) {
+    if (buttonId1.empty() || buttonId2.empty() || buttonId1 == buttonId2) {
+        std::cerr << "Error: Invalid button IDs provided for swap." << std::endl;
+        return false; // Cannot swap empty or identical IDs
+    }
+
+    auto pos1Opt = findButtonPosition(buttonId1);
+    auto pos2Opt = findButtonPosition(buttonId2);
+
+    if (!pos1Opt) {
+        std::cerr << "Error: Cannot swap, button ID not found in layout: " << buttonId1 << std::endl;
+        return false;
+    }
+    if (!pos2Opt) {
+        std::cerr << "Error: Cannot swap, button ID not found in layout: " << buttonId2 << std::endl;
+        return false;
+    }
+
+    auto [page1, row1, col1] = *pos1Opt;
+    auto [page2, row2, col2] = *pos2Opt;
+
+    // Directly swap the IDs in the layout map
+    // We need write access, so use operator[] which might create pages if they don't exist (shouldn't happen here)
+    // It's safer to check page existence first but findButtonPosition already implies they exist.
+    try {
+        std::cout << "Swapping '" << buttonId1 << "' at [" << page1 << "," << row1 << "," << col1 
+                  << "] with '" << buttonId2 << "' at [" << page2 << "," << row2 << "," << col2 << "]" << std::endl;
+        m_layout.pages.at(page1).at(row1).at(col1) = buttonId2;
+        m_layout.pages.at(page2).at(row2).at(col2) = buttonId1;
+    } catch (const std::out_of_range& e) {
+        // This should ideally not happen if findButtonPosition worked correctly
+        std::cerr << "Error: Out of range access during swap operation. Layout data might be inconsistent. " << e.what() << std::endl;
+        return false;
+    }
+
+    // Save the changes
+    if (!saveConfig()) {
+        std::cerr << "Error: Failed to save configuration after swapping buttons." << std::endl;
+        // Attempt to revert the swap in memory? Or just report error.
+        // Reverting:
+        try {
+             m_layout.pages.at(page1).at(row1).at(col1) = buttonId1;
+             m_layout.pages.at(page2).at(row2).at(col2) = buttonId2;
+             std::cerr << "Attempted to revert swap in memory due to save failure." << std::endl;
+        } catch (...) { /* Ignore errors during revert attempt */ }
+        return false;
+    }
+
+    return true;
 } 

@@ -122,4 +122,14 @@ bool NetworkManager::is_running() const {
 // Set the external message handler for WebSocket
 void NetworkManager::set_websocket_message_handler(MessageHandler handler) {
     m_webSocketServer.set_message_handler(handler);
+}
+
+// <<< ADDED: Implementation for broadcasting WebSocket state >>>
+void NetworkManager::broadcastWebSocketState() {
+    if (m_running) { // Only broadcast if the server is actually running
+        std::cout << "[NetworkManager] Received request to broadcast WebSocket state." << std::endl;
+        m_webSocketServer.broadcastCurrentState(); // Delegate to WebSocketServer
+    } else {
+        std::cout << "[NetworkManager] Server not running, skipping WebSocket broadcast." << std::endl;
+    }
 } 

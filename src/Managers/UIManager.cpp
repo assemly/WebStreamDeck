@@ -2,12 +2,13 @@
 #include "UIManager.hpp"
 #include "ActionRequestManager.hpp"
 #include "../Utils/NetworkUtils.hpp"
+#include "../Services/WebSocketServer.hpp" // Ensure included for implementation
 #include <stdio.h> // For printf used in button click
 #include <vector> // For std::vector
 #include <winsock2.h> // For Windows Sockets
 #include <ws2tcpip.h> // For inet_ntop, etc.
 #include <iphlpapi.h> // For GetAdaptersAddresses
-#include <iostream>   // For std::cerr
+#include <iostream>   // For std::cerr, std::cout
 #include <qrcodegen.hpp> // Re-add QR Code generation library
 
 
@@ -19,11 +20,13 @@
 #pragma comment(lib, "iphlpapi.lib") // Link against Iphlpapi.lib
 
 
-UIManager::UIManager(ConfigManager& configManager, ActionRequestManager& actionRequestManager, TranslationManager& translationManager)
-      :m_buttonGridWindow(configManager, actionRequestManager, translationManager),
+// <<< MODIFIED: Constructor takes NetworkManager reference >>>
+UIManager::UIManager(ConfigManager& configManager, ActionRequestManager& actionRequestManager, TranslationManager& translationManager, NetworkManager& networkManager)
+      : m_buttonGridWindow(configManager, actionRequestManager, translationManager, *this),
       m_configWindow(configManager, translationManager),
       m_statusLogWindow(translationManager),
-      m_qrCodeWindow(translationManager)
+      m_qrCodeWindow(translationManager),
+      m_networkManager(networkManager) // Initialize NetworkManager reference
 {
     m_serverIP = NetworkUtils::GetLocalIPv4();
 }
@@ -55,4 +58,10 @@ void UIManager::drawUI()
 void UIManager::setServerStatus(bool isRunning, int port) {
     m_isServerRunning = isRunning;
     m_serverPort = port;
+}
+
+// <<< MODIFIED: Implementation for notifyLayoutChanged >>>
+void UIManager::notifyLayoutChanged() {
+    std::cout << "[UIManager] Layout changed, notifying NetworkManager to broadcast." << std::endl;
+    m_networkManager.broadcastWebSocketState(); // Call the broadcast method
 }

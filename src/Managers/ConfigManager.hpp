@@ -2,8 +2,9 @@
 
 #include <string>
 #include <vector>
-#include <optional> // Include for optional return type
-#include <map> // Added for layout pages map
+#include <optional>
+#include <map>
+#include <tuple>
 #include <nlohmann/json.hpp>
 
 // Define structure for a single button configuration
@@ -62,6 +63,10 @@ public:
     bool setButtonPosition(const std::string& buttonId, int page, int row, int col);
     bool clearButtonPosition(int page, int row, int col);
 
+    // <<< ADDED: Methods for swap >>>
+    std::optional<std::tuple<int, int, int>> findButtonPosition(const std::string& buttonId) const;
+    bool swapButtons(const std::string& buttonId1, const std::string& buttonId2);
+
 private:
     std::vector<ButtonConfig> m_buttons;
     LayoutConfig m_layout; // Layout configuration member
@@ -72,4 +77,7 @@ private:
 
     // Helper to initialize layout pages based on dimensions
     static void initializeLayoutPages(LayoutConfig& layout);
+
+    // <<< ADDED: Declaration for internal helper >>>
+    bool findAndClearOldPosition(const std::string& buttonId);
 }; 

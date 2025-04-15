@@ -69,5 +69,10 @@
     "action_type_media_play_pause_display": "媒体：播放/暂停",
     "action_type_media_next_track_display": "媒体：下一曲",
     "action_type_media_prev_track_display": "媒体：上一曲",
-    "action_type_media_stop_display": "媒体：停止"
+    "action_type_media_stop_display": "媒体：停止",
+    "clear_button_label": "清除按钮",
+    "place_existing_button_label": "在此放置现有按钮",
+    "select_button_popup_title": "选择要放置的按钮",
+    "select_button_popup_desc": "选择一个按钮放置到 第 %d 页, 第 %d 行, 第 %d 列:",
+    "filter_placeholder": "按名称或 ID 过滤..."
 }
