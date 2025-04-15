@@ -11,6 +11,7 @@
 #include "../UIWindows/UIConfigurationWindow.hpp"
 #include "../UIWindows/UIStatusLogWindow.hpp"
 #include "../UIWindows/UIQrCodeWindow.hpp"
+#include "../UIWindows/UILayoutSettingsWindow.hpp"
 
 
 class UIManager
@@ -38,6 +39,7 @@ private:
     UIConfigurationWindow m_configWindow;
     UIStatusLogWindow m_statusLogWindow;
     UIQrCodeWindow m_qrCodeWindow;
+    UILayoutSettingsWindow m_layoutSettingsWindow;
 
     NetworkManager& m_networkManager;
 }; 

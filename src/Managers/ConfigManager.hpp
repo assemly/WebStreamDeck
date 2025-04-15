@@ -42,6 +42,12 @@ public:
     // Save current configuration to the specified file
     bool saveConfig();
 
+    // <<< ADDED: Load configuration from a specific file path >>>
+    bool loadConfigFromFile(const std::string& filePath);
+
+    // <<< ADDED: Save current configuration to a new preset file >>>
+    bool saveConfigToPreset(const std::string& presetName);
+
     // Get all button configurations
     const std::vector<ButtonConfig>& getButtons() const;
 
@@ -66,6 +72,9 @@ public:
     // <<< ADDED: Methods for swap >>>
     std::optional<std::tuple<int, int, int>> findButtonPosition(const std::string& buttonId) const;
     bool swapButtons(const std::string& buttonId1, const std::string& buttonId2);
+
+    // <<< ADDED: Method to set layout dimensions >>>
+    bool setLayoutDimensions(int newPageCount, int newRows, int newCols);
 
 private:
     std::vector<ButtonConfig> m_buttons;

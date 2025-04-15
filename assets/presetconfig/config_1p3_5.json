@@ -1,0 +1,170 @@
+{
+    "buttons": [
+        {
+            "action_param": "notepad.exe",
+            "action_type": "launch_app",
+            "icon_path": "assets/icons/puppy.gif",
+            "id": "btn_notepad",
+            "name": "Notepad1"
+        },
+        {
+            "action_param": "calc.exe",
+            "action_type": "launch_app",
+            "icon_path": "assets/icons/calculator.204x256.png",
+            "id": "btn_calc",
+            "name": "Calculator"
+        },
+        {
+            "action_param": "https://space.bilibili.com/5324474?spm_id_from=333.1007.0.0",
+            "action_type": "open_url",
+            "icon_path": "assets/icons/bilibili_round-384x384.png",
+            "id": "btn_bilibili",
+            "name": "b站"
+        },
+        {
+            "action_param": "",
+            "action_type": "media_volume_up",
+            "icon_path": "assets/icons/volume-up.256x232.png",
+            "id": "BTN_ADD",
+            "name": "音量增大"
+        },
+        {
+            "action_param": "",
+            "action_type": "media_mute",
+            "icon_path": "assets/icons/volume-down.256x232.png",
+            "id": "btn",
+            "name": "音量减少"
+        },
+        {
+            "action_param": "[",
+            "action_type": "hotkey",
+            "icon_path": "assets/icons/puppy.gif",
+            "id": "bt_bilibil_",
+            "name": "b站快进"
+        },
+        {
+            "action_param": "CTRL+A",
+            "action_type": "hotkey",
+            "icon_path": "assets/icons/puppy.gif",
+            "id": "btn_capture",
+            "name": "截图"
+        },
+        {
+            "action_param": "WeChat.exe",
+            "action_type": "launch_app",
+            "icon_path": "assets/icons/wechat.256x256.png",
+            "id": "btn_wechat",
+            "name": "微信"
+        },
+        {
+            "action_param": "QQ.exe",
+            "action_type": "launch_app",
+            "icon_path": "assets/icons/qq.216x256.png",
+            "id": "btn_qq",
+            "name": "QQ"
+        },
+        {
+            "action_param": "DingTalk.exe",
+            "action_type": "launch_app",
+            "icon_path": "assets/icons/dingding.203x256.png",
+            "id": "btn_dingtalk",
+            "name": "钉钉"
+        },
+        {
+            "action_param": "cloudmusic.exe",
+            "action_type": "launch_app",
+            "icon_path": "assets/icons/netease-cloud-music.255x256.png",
+            "id": "btn_netease_music",
+            "name": "网易云音乐"
+        },
+        {
+            "action_param": "CTRL+C",
+            "action_type": "hotkey",
+            "icon_path": "assets/icons/copy.256x256.png",
+            "id": "btn_copy",
+            "name": "复制"
+        },
+        {
+            "action_param": "CTRL+V",
+            "action_type": "hotkey",
+            "icon_path": "assets/icons/content-paste.210x256.png",
+            "id": "btn_paste",
+            "name": "粘贴"
+        },
+        {
+            "action_param": "WIN+L",
+            "action_type": "hotkey",
+            "icon_path": "assets/icons/gnome-lockscreen.256x253.png",
+            "id": "btn_lock_screen",
+            "name": "锁定屏幕"
+        },
+        {
+            "action_param": "CTRL+SHIFT+ESC",
+            "action_type": "hotkey",
+            "icon_path": "assets/icons/task_manager.png",
+            "id": "btn_task_manager",
+            "name": "任务管理器"
+        },
+        {
+            "action_param": "https://www.baidu.com",
+            "action_type": "open_url",
+            "icon_path": "assets/icons/baidu.234x256.png",
+            "id": "btn_baidu",
+            "name": "百度"
+        },
+        {
+            "action_param": "https://www.taobao.com",
+            "action_type": "open_url",
+            "icon_path": "assets/icons/taobao-circle.256x256.png",
+            "id": "btn_taobao",
+            "name": "淘宝"
+        },
+        {
+            "action_param": "https://www.jd.com",
+            "action_type": "open_url",
+            "icon_path": "assets/icons/jd-gui.256x256.png",
+            "id": "btn_jd",
+            "name": "京东"
+        },
+        {
+            "action_param": "https://weibo.com",
+            "action_type": "open_url",
+            "icon_path": "assets/icons/weibo.256x208.png",
+            "id": "btn_weibo",
+            "name": "微博"
+        }
+    ],
+    "layout": {
+        "cols_per_page": 5,
+        "page_count": 1,
+        "pages": [
+            [
+                0,
+                [
+                    [
+                        "btn_notepad",
+                        "btn_calc",
+                        "btn_bilibili",
+                        "btn_wechat",
+                        "btn_qq"
+                    ],
+                    [
+                        "btn_copy",
+                        "btn_paste",
+                        "btn_lock_screen",
+                        "BTN_ADD",
+                        "btn"
+                    ],
+                    [
+                        "",
+                        "",
+                        "btn_task_manager",
+                        "",
+                        ""
+                    ]
+                ]
+            ]
+        ],
+        "rows_per_page": 3
+    }
+}

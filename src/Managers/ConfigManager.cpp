@@ -6,6 +6,9 @@
 #include <algorithm> // For std::find_if, std::remove_if
 #include <optional> // For std::optional
 #include <tuple>   // For std::tuple
+#include <vector>   // Ensure vector is included
+#include <string>   // Ensure string is included
+#include <map>      // Ensure map is included
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
@@ -31,7 +34,7 @@ void ConfigManager::initializeLayoutPages(LayoutConfig& layout) {
 ConfigManager::ConfigManager(const std::string& filename) : m_configFilePath(filename)
 {
     if (!loadConfig()) {
-        std::cerr << "Warning: Failed to load configuration from " << m_configFilePath
+        std::cerr << "Warning: Failed to load configuration from " << m_configFilePath 
                   << ". Loading default configuration." << std::endl;
         loadDefaultConfig(); // This now also loads default layout
         // Attempt to save immediately after loading default
@@ -61,10 +64,10 @@ bool ConfigManager::loadConfig()
 
         // Load buttons (existing logic)
         if (configJson.contains("buttons") && configJson["buttons"].is_array()) {
-             configJson.at("buttons").get_to(m_buttons);
+            configJson.at("buttons").get_to(m_buttons);
         } else {
             std::cerr << "Warning: Config file missing 'buttons' array. Loading empty buttons." << std::endl;
-            m_buttons.clear();
+            m_buttons.clear(); 
         }
 
         // <<< ADDED: Load layout configuration >>>
@@ -95,11 +98,11 @@ bool ConfigManager::loadConfig()
         return true;
 
     } catch (json::parse_error& e) {
-        std::cerr << "Error parsing configuration file: " << m_configFilePath
-                  << "\nMessage: " << e.what()
-                  << "\nException id: " << e.id
+        std::cerr << "Error parsing configuration file: " << m_configFilePath 
+                  << "\nMessage: " << e.what() 
+                  << "\nException id: " << e.id 
                   << "\nByte position of error: " << e.byte << std::endl;
-        m_buttons.clear();
+        m_buttons.clear(); 
         m_layout = {}; // Reset layout on parse error
         initializeLayoutPages(m_layout); // Ensure layout is at least initialized
         return false;
@@ -134,7 +137,7 @@ bool ConfigManager::saveConfig()
 
         configFile << configJson.dump(4); // Use dump(4) for pretty printing
         configFile.close();
-
+        
         std::cout << "Configuration saved successfully to " << m_configFilePath << std::endl;
         return true;
 
@@ -250,8 +253,8 @@ bool ConfigManager::addButton(const ButtonConfig& button)
     }
     // Check for duplicate ID
     if (getButtonById(button.id).has_value()) {
-        std::cerr << "Error: Button with ID '" << button.id << "' already exists." << std::endl;
-        return false;
+             std::cerr << "Error: Button with ID '" << button.id << "' already exists." << std::endl;
+            return false;
     }
     m_buttons.push_back(button);
     // NOTE: Adding a button doesn't automatically place it in the layout.
@@ -288,7 +291,7 @@ bool ConfigManager::removeButton(const std::string& id)
 {
     if (id.empty()) return false;
 
-    auto it = std::remove_if(m_buttons.begin(), m_buttons.end(),
+    auto it = std::remove_if(m_buttons.begin(), m_buttons.end(), 
                              [&id](const ButtonConfig& b){ return b.id == id; });
 
     if (it != m_buttons.end()) {
@@ -517,4 +520,270 @@ bool ConfigManager::swapButtons(const std::string& buttonId1, const std::string&
     }
 
     return true;
+}
+
+// <<< MODIFIED: Implementation for setLayoutDimensions with relocation >>>
+bool ConfigManager::setLayoutDimensions(int newPageCount, int newRows, int newCols) {
+    if (newPageCount < 1 || newRows < 1 || newCols < 1) {
+        std::cerr << "[ConfigManager] Error: Invalid layout dimensions provided (must be >= 1)." << std::endl;
+        return false;
+    }
+
+    std::cout << "[ConfigManager] Starting layout dimension update to [P:" << newPageCount 
+              << ", R:" << newRows << ", C:" << newCols << "]" << std::endl;
+
+    // 1. Backup & Collect old placements
+    std::vector<std::tuple<int, int, int, std::string>> oldPlacements;
+    std::map<std::string, bool> placedButtons; // Keep track of buttons placed
+    for (const auto& pagePair : m_layout.pages) {
+        int page = pagePair.first;
+        const auto& grid = pagePair.second;
+        for (int r = 0; r < grid.size(); ++r) {
+            const auto& rowVec = grid[r];
+            for (int c = 0; c < rowVec.size(); ++c) {
+                if (!rowVec[c].empty()) {
+                    oldPlacements.emplace_back(page, r, c, rowVec[c]);
+                }
+            }
+        }
+    }
+    std::cout << "[ConfigManager] Collected " << oldPlacements.size() << " existing button placements." << std::endl;
+
+    // 2. Create new empty layout structure
+    std::map<int, std::vector<std::vector<std::string>>> newPages;
+    for (int p = 0; p < newPageCount; ++p) {
+        newPages[p] = std::vector<std::vector<std::string>>(newRows, std::vector<std::string>(newCols, ""));
+    }
+
+    // 3. Place buttons that remain within bounds
+    std::vector<std::string> buttonsToRelocate;
+    for (const auto& placement : oldPlacements) {
+        int oldPage, oldRow, oldCol;
+        std::string buttonId;
+        std::tie(oldPage, oldRow, oldCol, buttonId) = placement;
+
+        // Check if the old position is still valid in the new layout
+        if (oldPage < newPageCount && oldRow < newRows && oldCol < newCols) {
+            // Check if target slot is empty (it should be, but safety check)
+            if (newPages[oldPage][oldRow][oldCol].empty()) {
+                newPages[oldPage][oldRow][oldCol] = buttonId;
+                placedButtons[buttonId] = true;
+                // std::cout << "  - Kept button '" << buttonId << "' at original position [" << oldPage << "," << oldRow << "," << oldCol << "]" << std::endl;
+            } else {
+                 // This case means a button was already placed here, likely due to duplicate IDs in old layout?
+                 // Place the current one elsewhere if possible
+                 std::cerr << "[ConfigManager] Warning: Target slot [" << oldPage << "," << oldRow << "," << oldCol << "] was already occupied when trying to keep button '" << buttonId << "'. Marking for relocation." << std::endl;
+                 buttonsToRelocate.push_back(buttonId);
+            }
+        } else {
+            // Mark button for relocation if its original position is out of bounds
+            buttonsToRelocate.push_back(buttonId);
+            // std::cout << "  - Marked button '" << buttonId << "' from old position [" << oldPage << "," << oldRow << "," << oldCol << "] for relocation." << std::endl;
+        }
+    }
+     std::cout << "[ConfigManager] Buttons kept at original relative positions: " << placedButtons.size() 
+               << ". Buttons needing relocation: " << buttonsToRelocate.size() << std::endl;
+
+
+    // 4. Find available empty slots in the new layout
+    std::vector<std::tuple<int, int, int>> availableSlots;
+    for (int p = 0; p < newPageCount; ++p) {
+        for (int r = 0; r < newRows; ++r) {
+            for (int c = 0; c < newCols; ++c) {
+                if (newPages[p][r][c].empty()) {
+                    availableSlots.emplace_back(p, r, c);
+                }
+            }
+        }
+    }
+    std::cout << "[ConfigManager] Found " << availableSlots.size() << " available empty slots in the new layout." << std::endl;
+
+    // 5. Relocate displaced buttons
+    int relocatedCount = 0;
+    int discardedCount = 0;
+    for (const auto& buttonId : buttonsToRelocate) {
+        // Check if this button was already placed (e.g., kept at original position)
+        if (placedButtons.count(buttonId)) {
+             // std::cout << "  - Button '" << buttonId << "' was already kept, skipping relocation attempt." << std::endl;
+             continue; 
+        }
+
+        if (!availableSlots.empty()) {
+            // Get the next available slot
+            int nextPage, nextRow, nextCol;
+            std::tie(nextPage, nextRow, nextCol) = availableSlots.front();
+            availableSlots.erase(availableSlots.begin()); // Remove the used slot
+
+            // Place the button
+            newPages[nextPage][nextRow][nextCol] = buttonId;
+            placedButtons[buttonId] = true; // Mark as placed
+            relocatedCount++;
+            std::cout << "  - Relocated button '" << buttonId << "' to new position [" << nextPage << "," << nextRow << "," << nextCol << "]" << std::endl;
+        } else {
+            // No more empty slots, discard the button from layout
+            discardedCount++;
+            std::cout << "  - Discarded button '" << buttonId << "' from layout (no available slots)." << std::endl;
+            // Note: The button itself still exists in m_buttons, just not in the layout
+        }
+    }
+    std::cout << "[ConfigManager] Relocated " << relocatedCount << " buttons. Discarded " << discardedCount << " buttons from layout." << std::endl;
+
+    // 6. Update internal layout state and save
+    m_layout.pages = std::move(newPages); // Replace old map with the newly constructed one
+    m_layout.page_count = newPageCount;
+    m_layout.rows_per_page = newRows;
+    m_layout.cols_per_page = newCols;
+
+    if (!saveConfig()) {
+        std::cerr << "[ConfigManager] Error: Failed to save config after updating layout dimensions! State may be inconsistent." << std::endl;
+        // Difficult to revert reliably here, rely on user to potentially fix manually or reload previous config
+        return false;
+    }
+
+    std::cout << "[ConfigManager] Layout dimensions updated, buttons relocated/discarded, and configuration saved." << std::endl;
+    return true;
+}
+
+// <<< ADDED: Implementation for loading config from a specific file >>>
+bool ConfigManager::loadConfigFromFile(const std::string& filePath) {
+    std::cout << "[ConfigManager] Attempting to load preset configuration from: " << filePath << std::endl;
+    if (!fs::exists(filePath)) {
+         std::cerr << "[ConfigManager] Error: Preset file not found: " << filePath << std::endl;
+         return false;
+    }
+
+    std::ifstream presetFile(filePath);
+    if (!presetFile.is_open()) {
+        std::cerr << "[ConfigManager] Error: Could not open preset file: " << filePath << std::endl;
+        return false;
+    }
+
+    try {
+        json configJson;
+        presetFile >> configJson;
+        presetFile.close();
+
+        // Temporary storage for loaded data
+        std::vector<ButtonConfig> tempButtons;
+        LayoutConfig tempLayout;
+
+        // Load buttons
+        if (configJson.contains("buttons") && configJson["buttons"].is_array()) {
+            configJson.at("buttons").get_to(tempButtons);
+        } else {
+            std::cerr << "[ConfigManager] Warning: Preset file missing 'buttons' array. Loading empty buttons." << std::endl;
+            tempButtons.clear(); 
+        }
+
+        // Load layout
+        if (configJson.contains("layout") && configJson["layout"].is_object()) {
+            configJson.at("layout").get_to(tempLayout);
+            // Basic validation after loading preset layout
+            if (tempLayout.page_count <= 0 || tempLayout.rows_per_page <= 0 || tempLayout.cols_per_page <= 0) {
+                 std::cerr << "[ConfigManager] Warning: Preset file contains invalid layout dimensions. Resetting to default." << std::endl;
+                 tempLayout = {}; // Reset to default struct values
+                 initializeLayoutPages(tempLayout);
+            } else {
+                 // Ensure map consistency (similar to loadConfig)
+                 if (tempLayout.pages.empty() || tempLayout.pages.size() != static_cast<size_t>(tempLayout.page_count)) {
+                     std::cout << "[ConfigManager] Info: Preset layout pages map inconsistent. Re-initializing." << std::endl;
+                     initializeLayoutPages(tempLayout);
+                 } else {
+                      // Optional: Further validation of row/col dimensions within map
+                 }
+            }
+        } else {
+            std::cerr << "[ConfigManager] Warning: Preset file missing 'layout' object. Initializing default layout structure." << std::endl;
+            tempLayout = {};
+            initializeLayoutPages(tempLayout);
+        }
+
+        // --- Apply loaded data to ConfigManager --- 
+        m_buttons = std::move(tempButtons);
+        m_layout = std::move(tempLayout);
+
+        // <<< IMPORTANT: Overwrite the main config path and save >>>
+        // We assume loading a preset makes it the new main config.
+        // If you want presets to be temporary, skip saveConfig().
+        std::cout << "[ConfigManager] Preset loaded successfully. Saving as current configuration..." << std::endl;
+        if (!saveConfig()) {
+            std::cerr << "[ConfigManager] Error: Failed to save the loaded preset to the main config file: " << m_configFilePath << std::endl;
+            // State is already updated in memory, but save failed.
+            return false; // Indicate save failure, though load succeeded.
+        }
+
+        std::cout << "[ConfigManager] Preset loaded and saved as current config." << std::endl;
+        return true; // Load and save successful
+
+    } catch (json::parse_error& e) {
+        std::cerr << "[ConfigManager] Error parsing preset file: " << filePath << "\nMessage: " << e.what() << std::endl;
+        return false;
+    } catch (json::exception& e) {
+        std::cerr << "[ConfigManager] Error processing JSON in preset file " << filePath << ": " << e.what() << std::endl;
+        return false;
+    } catch (const std::exception& e) {
+        std::cerr << "[ConfigManager] An unknown error occurred while loading the preset file " << filePath << ": " << e.what() << std::endl;
+        return false;
+    }
+}
+
+// <<< ADDED: Implementation for saving config to a new preset file >>>
+bool ConfigManager::saveConfigToPreset(const std::string& presetName) {
+    if (presetName.empty()) {
+        std::cerr << "[ConfigManager] Error: Preset name cannot be empty." << std::endl;
+        return false;
+    }
+
+    // Basic validation for preset name (prevent directory traversal, etc.)
+    // Replace potentially problematic characters? For simplicity, just check for slashes/backslashes.
+    if (presetName.find('/') != std::string::npos || presetName.find('\\') != std::string::npos) {
+        std::cerr << "[ConfigManager] Error: Preset name cannot contain path separators (/ or \\)." << std::endl;
+        return false;
+    }
+
+    // Ensure the presets directory exists
+    const std::string presetsDir = "assets/presetconfig";
+    try {
+        if (!fs::exists(presetsDir)) {
+            std::cout << "[ConfigManager] Presets directory not found, creating: " << presetsDir << std::endl;
+            if (!fs::create_directories(presetsDir)) {
+                std::cerr << "[ConfigManager] Error: Failed to create presets directory: " << presetsDir << std::endl;
+                return false;
+            }
+        }
+    } catch (const fs::filesystem_error& e) {
+        std::cerr << "[ConfigManager] Filesystem error checking/creating presets directory: " << e.what() << std::endl;
+        return false;
+    }
+
+    // Construct the full path for the new preset file
+    std::string presetFilePath = presetsDir + "/" + presetName + ".json";
+    std::cout << "[ConfigManager] Attempting to save current configuration as preset: " << presetFilePath << std::endl;
+
+    // Open the file for writing (this will create or overwrite)
+    std::ofstream presetFile(presetFilePath);
+    if (!presetFile.is_open()) {
+        std::cerr << "[ConfigManager] Error: Could not open preset file for writing: " << presetFilePath << std::endl;
+        return false;
+    }
+
+    // Serialize current m_buttons and m_layout to JSON
+    try {
+        json configJson;
+        configJson["buttons"] = m_buttons;
+        configJson["layout"] = m_layout;
+
+        presetFile << configJson.dump(4); // Pretty print
+        presetFile.close();
+
+        std::cout << "[ConfigManager] Current configuration saved successfully as preset: " << presetFilePath << std::endl;
+        return true;
+
+    } catch (json::exception& e) {
+        std::cerr << "[ConfigManager] Error creating JSON for preset file " << presetFilePath << ": " << e.what() << std::endl;
+        return false;
+    } catch (const std::exception& e) {
+         std::cerr << "[ConfigManager] An unknown error occurred while saving the preset file " << presetFilePath << ": " << e.what() << std::endl;
+        return false;
+    }
 } 

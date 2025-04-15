@@ -63,6 +63,7 @@ add_executable(${PROJECT_NAME}
     src/UIWindows/UIConfigurationWindow.cpp
     src/UIWindows/UIStatusLogWindow.cpp
     src/UIWindows/UIQrCodeWindow.cpp
+    src/UIWindows/UILayoutSettingsWindow.cpp
     src/main.cpp
 )
 
@@ -92,29 +93,14 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMENT "Copying web assets to output directory"
 )
 
-# Copy the lang directory from assets to the executable output directory after build
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/assets/lang # Source directory (project root/assets/lang)
-        $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets/lang # Destination directory (executable dir/assets/lang)
-    COMMENT "Copying language assets to output directory"
-)
 
 # Copy the fonts directory from assets to the executable output directory after build
 # NOTE: Adjust the filename if you are using a different font
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different # Copy the entire directory
-        ${CMAKE_SOURCE_DIR}/assets/fonts # Source fonts directory
-        $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets/fonts # Destination fonts directory
-    COMMENT "Copying font assets to output directory"
-)
-
-# Copy the icons directory from assets to the executable output directory after build
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
-        ${CMAKE_SOURCE_DIR}/assets/icons # Source icons directory (adjust if needed)
-        $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets/icons # Destination icons directory
-    COMMENT "Copying icon assets to output directory"
+        ${CMAKE_SOURCE_DIR}/assets# Source fonts directory
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets # Destination fonts directory
+    COMMENT "Copying assets to output directory"
 )
 
 # 为 MSVC 编译器设置源文件和执行字符集为 UTF-8

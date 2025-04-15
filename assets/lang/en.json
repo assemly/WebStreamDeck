@@ -74,5 +74,18 @@
     "place_existing_button_label": "Place Existing Button Here",
     "select_button_popup_title": "Select Button to Place",
     "select_button_popup_desc": "Select a button to place at Page %d, Row %d, Col %d:",
-    "filter_placeholder": "Filter by name or ID..."
+    "filter_placeholder": "Filter by name or ID...",
+    "layout_settings_window_title": "Layout Settings",
+    "layout_settings_description": "Configure the grid layout dimensions. Changing these values might remove buttons from pages or cells that no longer exist.",
+    "page_count_label": "Page Count",
+    "rows_per_page_label": "Rows per Page",
+    "cols_per_page_label": "Cols per Page",
+    "apply_changes_button": "Apply Changes",
+    "reset_button_label": "Reset",
+    "preset_management_header": "Preset Management",
+    "load_preset_label": "Load Preset:",
+    "load_selected_button": "Load Selected",
+    "refresh_list_button": "Refresh List",
+    "save_preset_label": "Save Current as Preset:",
+    "save_as_button": "Save As"
 }

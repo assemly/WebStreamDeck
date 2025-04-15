@@ -74,5 +74,18 @@
     "place_existing_button_label": "在此放置现有按钮",
     "select_button_popup_title": "选择要放置的按钮",
     "select_button_popup_desc": "选择一个按钮放置到 第 %d 页, 第 %d 行, 第 %d 列:",
-    "filter_placeholder": "按名称或 ID 过滤..."
+    "filter_placeholder": "按名称或 ID 过滤...",
+    "layout_settings_window_title": "布局设置",
+    "layout_settings_description": "配置网格布局的维度。更改这些值可能会导致按钮从不再存在的页面或单元格中移除。",
+    "page_count_label": "页面数量",
+    "rows_per_page_label": "每页行数",
+    "cols_per_page_label": "每页列数",
+    "apply_changes_button": "应用更改",
+    "reset_button_label": "重置",
+    "preset_management_header": "预设管理",
+    "load_preset_label": "加载预设：",
+    "load_selected_button": "加载选中",
+    "refresh_list_button": "刷新列表",
+    "save_preset_label": "另存为预设：",
+    "save_as_button": "另存为"
 }

@@ -1,12 +1,22 @@
 #include "UIConfigurationWindow.hpp"
+#include "../Managers/UIManager.hpp"
 #include "../Utils/InputUtils.hpp" // Include necessary headers
 #include <iostream>          // For std::cout, std::cerr
 #include <cstring>           // For strncpy, strlen
 #include <string>            // For std::string manipulation
+#include <filesystem>        // For directory operations
+#include <algorithm>         // For string manipulation (tolower)
 
+namespace fs = std::filesystem;
 
-UIConfigurationWindow::UIConfigurationWindow(ConfigManager& configManager, TranslationManager& translationManager)
-    : m_configManager(configManager), m_translator(translationManager) {}
+UIConfigurationWindow::UIConfigurationWindow(UIManager& uiManager, ConfigManager& configManager, TranslationManager& translationManager)
+    : m_uiManager(uiManager),
+      m_configManager(configManager),
+      m_translator(translationManager)
+{
+    loadCurrentSettings(); // Load initial layout settings
+    scanPresetDirectory(); // Scan for presets on initialization
+}
 
 // Implementation of HandleFileDialog (moved from the end of drawConfigurationWindow)
 void UIConfigurationWindow::HandleFileDialog() {
@@ -57,6 +67,43 @@ void UIConfigurationWindow::HandleFileDialog() {
     }
 }
 
+void UIConfigurationWindow::loadCurrentSettings() {
+    const auto& layout = m_configManager.getLayoutConfig();
+    m_tempPageCount = layout.page_count;
+    m_tempRowsPerPage = layout.rows_per_page;
+    m_tempColsPerPage = layout.cols_per_page;
+}
+
+void UIConfigurationWindow::scanPresetDirectory() {
+    m_presetFileNames.clear();
+    m_selectedPresetIndex = -1; // Reset selection
+
+    try {
+        if (!fs::exists(m_presetsDir)) {
+            std::cout << "[UIConfigWindow] Preset directory not found: " << m_presetsDir << ". No presets loaded." << std::endl;
+            return; // Directory doesn't exist, nothing to scan
+        }
+
+        for (const auto& entry : fs::directory_iterator(m_presetsDir)) {
+            if (entry.is_regular_file()) {
+                fs::path filepath = entry.path();
+                std::string extension = filepath.extension().string();
+                // Simple case-insensitive check for .json
+                std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+                
+                if (extension == ".json") {
+                    m_presetFileNames.push_back(filepath.stem().string()); // Add filename without extension
+                }
+            }
+        }
+        std::cout << "[UIConfigWindow] Scanned presets directory. Found " << m_presetFileNames.size() << " preset files." << std::endl;
+
+    } catch (const fs::filesystem_error& e) {
+        std::cerr << "[UIConfigWindow] Filesystem error while scanning presets directory: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "[UIConfigWindow] Error scanning presets directory: " << e.what() << std::endl;
+    }
+}
 
 void UIConfigurationWindow::Draw() {
     ImGui::Begin(m_translator.get("config_window_title").c_str());
@@ -446,6 +493,91 @@ void UIConfigurationWindow::Draw() {
     // Call the helper function to display and handle results for *all* file dialogs this window might use.
     HandleFileDialog();
 
+    ImGui::Separator(); // Add a separator before the preset section
+    ImGui::TextUnformatted(m_translator.get("preset_management_header").c_str());
+
+    // --- Preset Loading ---
+    ImGui::TextUnformatted(m_translator.get("load_preset_label").c_str());
+    ImGui::SameLine();
+
+    // Need to convert vector<string> to const char* const* for ImGui::Combo
+    std::vector<const char*> presetItems;
+    for (const auto& name : m_presetFileNames) {
+        presetItems.push_back(name.c_str());
+    }
+
+    // Combo box to select preset
+    ImGui::PushItemWidth(200); // Adjust width as needed
+    if (ImGui::Combo("##PresetSelect", &m_selectedPresetIndex, presetItems.data(), presetItems.size())) {
+        // Selection changed
+    }
+    ImGui::PopItemWidth();
+    ImGui::SameLine();
+
+    // Button to load the selected preset
+    if (ImGui::Button(m_translator.get("load_selected_button").c_str())) {
+        if (m_selectedPresetIndex >= 0 && m_selectedPresetIndex < m_presetFileNames.size()) {
+            std::string selectedPresetName = m_presetFileNames[m_selectedPresetIndex];
+            std::string fullPath = m_presetsDir + "/" + selectedPresetName + ".json";
+            std::cout << "[UIConfigWindow] Attempting to load preset: " << fullPath << std::endl;
+            if (m_configManager.loadConfigFromFile(fullPath)) {
+                std::cout << "[UIConfigWindow] Preset loaded successfully. Updating UI and notifying." << std::endl;
+                loadCurrentSettings(); // Update temp variables in this window
+                // Assuming m_uiManager exists and is valid
+                m_uiManager.notifyLayoutChanged(); 
+            } else {
+                std::cerr << "[UIConfigWindow] Failed to load preset: " << fullPath << std::endl;
+                // TODO: Show error message in UI
+            }
+        } else {
+            std::cout << "[UIConfigWindow] No preset selected or index out of bounds." << std::endl;
+             // TODO: Show message if nothing is selected
+        }
+    }
+    ImGui::SameLine();
+
+    // Button to refresh the preset list
+    if (ImGui::Button(m_translator.get("refresh_list_button").c_str())) {
+        scanPresetDirectory();
+    }
+
+    ImGui::Spacing(); // Add some space
+
+    // --- Preset Saving ---
+    ImGui::TextUnformatted(m_translator.get("save_preset_label").c_str());
+    ImGui::SameLine();
+
+    // Input field for the new preset name
+    ImGui::PushItemWidth(200); // Adjust width
+    ImGui::InputText("##NewPresetName", m_newPresetNameBuffer, sizeof(m_newPresetNameBuffer));
+    ImGui::PopItemWidth();
+    ImGui::SameLine();
+
+    // Button to save the current config as a new preset
+    if (ImGui::Button(m_translator.get("save_as_button").c_str())) {
+        std::string newName = m_newPresetNameBuffer;
+        // Basic validation: Trim whitespace? Check if empty?
+        if (!newName.empty()) { // Add more robust validation if needed
+             std::cout << "[UIConfigWindow] Attempting to save current config as preset: " << newName << std::endl;
+            if (m_configManager.saveConfigToPreset(newName)) {
+                std::cout << "[UIConfigWindow] Preset saved successfully. Refreshing list." << std::endl;
+                scanPresetDirectory(); // Refresh the list to include the new preset
+                m_newPresetNameBuffer[0] = '\0'; // Clear the input buffer
+                // TODO: Provide success feedback in UI
+            } else {
+                 std::cerr << "[UIConfigWindow] Failed to save preset: " << newName << std::endl;
+                 // TODO: Show error message in UI
+            }
+        } else {
+             std::cout << "[UIConfigWindow] Preset name cannot be empty." << std::endl;
+              // TODO: Show message if name is empty
+        }
+    }
+
+    ImGui::Separator(); // Separator after the preset section
+
+    // --- Button List Section ---
+    ImGui::Separator(); // Separator before button list
 
     ImGui::End(); // End Configuration Window
 }
