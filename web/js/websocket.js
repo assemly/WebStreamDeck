@@ -8,10 +8,13 @@ function connectWebSocket(appUIModule, statusElement) {
     uiModule = appUIModule;
     connectionStatusDiv = statusElement;
 
-    console.log(`Attempting to connect to WebSocket: ${config.websocketUrl}`);
+    const host = config.serverAddress || window.location.hostname;
+    const port = config.serverPort || 9002;
+    const url = `ws://${host}:${port}/ws`;
+    console.log(`Attempting to connect to WebSocket: ${url}`);
     updateStatus('Connecting...', 'status-connecting');
 
-    websocket = new WebSocket(config.websocketUrl);
+    websocket = new WebSocket(url);
 
     websocket.onopen = (event) => {
         console.log('WebSocket connection opened');
@@ -48,10 +51,21 @@ function handleServerMessage(message) {
     if (!uiModule) return; // Guard against UI module not ready
 
     switch (message.type) {
-        case 'initial_config':
-        case 'layout_update': // Assuming server might send updates
-            console.log('Received layout configuration:', message.payload.layout);
-            uiModule.loadButtons(message.payload.layout);
+        case 'initial_state':
+            if (message.payload && message.payload.buttons && message.payload.layout) {
+                console.log('Received initial state:', message.payload);
+                uiModule.loadInitialData(message.payload.buttons, message.payload.layout);
+            } else {
+                console.error('Invalid initial_state payload received:', message.payload);
+            }
+            break;
+        case 'layout_update':
+            if (message.payload && message.payload.layout) {
+                console.log('Received layout update:', message.payload.layout);
+                console.warn('Received layout_update, but full reload logic might be needed.');
+            } else {
+                console.error('Invalid layout_update payload received:', message.payload);
+            }
             break;
         // Add other message types here
         default:

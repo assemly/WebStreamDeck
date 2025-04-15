@@ -39,8 +39,8 @@ std::optional<std::string> HttpServer::readFile(const std::filesystem::path& pat
         return std::nullopt;
     }
 
-    auto webRootCanonical = std::filesystem::weakly_canonical(WEB_ROOT);
-    auto iconsRootCanonical = std::filesystem::weakly_canonical(ASSETS_ICONS_ROOT);
+    auto webRootCanonical = std::filesystem::weakly_canonical(NetworkConstants::WEB_ROOT);
+    auto iconsRootCanonical = std::filesystem::weakly_canonical(NetworkConstants::ASSETS_ICONS_ROOT);
 
     // Check if the canonical path starts with either allowed root's canonical path
     std::string canonicalPathStr = canonicalPath.string();
@@ -81,10 +81,10 @@ void HttpServer::registerHttpHandlers(uWS::App* app) {
         constexpr std::string_view iconsPrefix = "/assets/icons/";
         // Use rfind for prefix check, more standard than find for prefix
         if (url.rfind(iconsPrefix, 0) == 0) { 
-            basePath = ASSETS_ICONS_ROOT;
+            basePath = NetworkConstants::ASSETS_ICONS_ROOT;
             relativeUrl = url.substr(iconsPrefix.length());
         } else {
-            basePath = WEB_ROOT;
+            basePath = NetworkConstants::WEB_ROOT;
             // Handle root path correctly
             relativeUrl = (url == "/" || url.empty()) ? "index.html" : (url[0] == '/' ? url.substr(1) : url);
              if (relativeUrl.empty()) { // Ensure it's never empty after substr(1)

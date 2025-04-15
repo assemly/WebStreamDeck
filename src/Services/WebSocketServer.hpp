@@ -4,19 +4,22 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <functional>
+#include <vector>
 #include "../Managers/ConfigManager.hpp" // Needs access to ConfigManager for initial config
 #include "../Constants/NetworkConstants.hpp" // <<< UPDATED PATH
 
 // Use nlohmann/json
 using json = nlohmann::json;
 
-// Define an empty struct as user data type for each WebSocket
-// Could potentially be moved to a common network header if needed elsewhere
-struct PerSocketData {}; 
+// Define the actual user data struct for each WebSocket connection
+struct PerSocketData {
+    // Add any per-connection data here later if needed
+    // Example: std::string userId;
+};
 
 // Define the message handler callback function type
 // This defines the *external* handler signature expected by the user of this class
-using MessageHandler = std::function<void(const json&, bool)>; 
+using MessageHandler = std::function<void(const json&, bool isBinary)>;
 // Note: Internal uWS handler still gets the ws pointer, but we abstract it away
 //       for the external handler set via set_message_handler.
 
@@ -34,7 +37,20 @@ public:
 private:
     ConfigManager& m_configManager; // Store reference to ConfigManager
     MessageHandler m_message_handler; // Store the external handler
+    // Use PerSocketData in the template for the clients vector
+    std::vector<uWS::WebSocket<false, true, PerSocketData>*> m_clients; // <<< ADDED: Keep track of connected clients
 
     // Helper to generate web icon path (extracted from old CommServer::configure_app)
     std::string getWebIconPath(const std::string& configuredPath);
+
+    // <<< ADDED: Helper to send initial state to a client >>>
+    void sendInitialState(uWS::WebSocket<false, true, PerSocketData>* ws);
+
+    // <<< ADDED: Private handlers for uWS events >>>
+    void on_open(uWS::WebSocket<false, true, PerSocketData>* ws);
+    void on_message(uWS::WebSocket<false, true, PerSocketData>* ws, std::string_view message, uWS::OpCode opCode);
+    void on_close(uWS::WebSocket<false, true, PerSocketData>* ws, int code, std::string_view message);
+
+    // <<< ADDED: Helper to broadcast messages (optional) >>>
+    void broadcast(const std::string& message);
 }; 

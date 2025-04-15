@@ -20,35 +20,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.uiModule && window.websocketService && window.config) {
         console.log("Modules loaded, initializing...");
         
-        // Initialize UI (e.g., attach fullscreen listener)
+        // Initialize UI (e.g., attach fullscreen listener, internal resize handler)
         window.uiModule.init();
 
         // Initialize WebSocket connection, passing UI module and status element
-        window.websocketService.connectWebSocket(window.uiModule, window.uiModule.connectionStatusDiv);
+        const statusDiv = document.getElementById('connection-status'); // Get status div here
+        window.websocketService.connectWebSocket(window.uiModule, statusDiv); // Pass the element
 
-        // Create a debounced version of the function to reload layout
+        // REMOVED: Resize handling is now done internally within ui.js
+        /*
         const reloadLayout = debounce(() => {
             console.log("Resize/orientation change detected, reloading layout...");
-            // Need access to the stored layout data. 
-            // We assume uiModule internally stores it now.
-            // We just need to call loadButtons with *something* to trigger the reload.
-            // Passing null or undefined might be better if loadButtons handles it.
-            // OR retrieve it if uiModule exposes it.
-            
-            // Simplest approach: Call loadButtons with the currently stored layout
-            // This assumes uiModule.loadButtons can be called without arguments
-            // and will use its internal `currentButtonLayout`.
-            // Let's modify ui.js loadButtons to accept no arguments for this.
-            window.uiModule.loadButtons(); // Trigger reload using internal data
-            
-        }, 250); // Wait 250ms after resize stops
-
-        // Listen for resize events (includes orientation changes)
+            // Previous logic attempted to call non-existent loadButtons
+        }, 250);
         window.addEventListener('resize', reloadLayout);
+        */
 
     } else {
         console.error("Required JavaScript modules not loaded!");
-        // Display error to user? 
+        // Display error to user?
         const statusDiv = document.getElementById('connection-status');
         if(statusDiv) {
             statusDiv.textContent = 'Initialization Error';

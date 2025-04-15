@@ -22,7 +22,7 @@ std::string WebSocketServer::getWebIconPath(const std::string& configuredPath) {
     std::replace(pathStr.begin(), pathStr.end(), '\\', '/');
 
     // Define the expected relative prefix (using constant from NetworkConstants.hpp)
-    std::string expectedPrefix = ASSETS_ICONS_ROOT.string();
+    std::string expectedPrefix = NetworkConstants::ASSETS_ICONS_ROOT.string();
     std::replace(expectedPrefix.begin(), expectedPrefix.end(), '\\', '/');
 
     // Check if the path starts with the expected relative prefix
@@ -51,81 +51,125 @@ std::string WebSocketServer::getWebIconPath(const std::string& configuredPath) {
     return webIconPath;
 }
 
-
-void WebSocketServer::registerWebSocketHandlers(uWS::App* app) {
-     if (!app) return;
-
-    app->ws<PerSocketData>("/*", {
-        /* Settings */
-        .compression = uWS::SHARED_COMPRESSOR,
-        .maxPayloadLength = 16 * 1024 * 1024, // 16MB max payload
-        .idleTimeout = 600, // Timeout in seconds (e.g., 10 minutes)
-
-        /* Handlers */
-        .open = [this](uWS::WebSocket<false, true, PerSocketData> *ws) {
-            std::cout << "[WS] Client connected. Address: " << ws->getRemoteAddressAsText() << std::endl;
-            
-            // --- Send initial configuration --- 
-            try {
-                const auto& buttons = m_configManager.getButtons();
-                json layout = json::array();
-                for (const auto& btn : buttons) {
-                    layout.push_back({
-                        {"id", btn.id},
-                        {"name", btn.name},
-                        {"icon_path", getWebIconPath(btn.icon_path)} // Use helper method
-                    });
-                }
-                json configMsg = {
-                    {"type", "initial_config"},
-                    {"payload", {{"layout", layout}}}
-                };
-                ws->send(configMsg.dump(), uWS::OpCode::TEXT);
-                std::cout << "[WS] Sent initial config to client." << std::endl; 
-            } catch (const std::exception& e) {
-                std::cerr << "[WS] Error sending initial config: " << e.what() << std::endl;
-            }
-            // -------------------------------------
-        },
-        .message = [this](uWS::WebSocket<false, true, PerSocketData> *ws, std::string_view message, uWS::OpCode opCode) {
-            if (opCode == uWS::OpCode::TEXT) {
-                std::cout << "[WS] Received message: " << message << std::endl;
-                if (m_message_handler) {
-                    try {
-                        json payload_json = json::parse(message);
-                        // Call the external handler, abstracting away the ws pointer
-                        m_message_handler(payload_json, false);
-                    }
-                    catch (const json::parse_error& e) {
-                        std::cerr << "[WS] Failed to parse JSON message: " << e.what() << std::endl;
-                        ws->send("{\"error\": \"Invalid JSON format\"}", uWS::OpCode::TEXT);
-                    }
-                     catch (const std::exception& e) {
-                        std::cerr << "[WS] Error processing message: " << e.what() << std::endl;
-                        ws->send("{\"error\": \"Internal server error\"}", uWS::OpCode::TEXT);
-                    }
-                }
-            } else if (opCode == uWS::OpCode::BINARY) {
-                std::cout << "[WS] Received binary message of size: " << message.length() << std::endl;
-                // Optionally call handler if it supports binary: m_message_handler(jsonData, true);
-            }
-        },
-        .drain = [](uWS::WebSocket<false, true, PerSocketData> *ws) {
-            // Can check ws->getBufferedAmount() and potentially send more data
-        },
-        .ping = [](uWS::WebSocket<false, true, PerSocketData> *ws, std::string_view) {
-            // Pong is sent automatically by uWS
-        },
-        .pong = [](uWS::WebSocket<false, true, PerSocketData> *ws, std::string_view) {
-            // Received pong from client
-        },
-        .close = [](uWS::WebSocket<false, true, PerSocketData> *ws, int code, std::string_view message) {
-             std::cout << "[WS] Client disconnected. Code: " << code << ", Message: " << message << std::endl;
-        }
-    });
-}
-
 // Set the external message handler
 void WebSocketServer::set_message_handler(MessageHandler handler) {
     m_message_handler = handler;
+}
+
+// Helper to send the initial configuration state to a newly connected client
+void WebSocketServer::sendInitialState(uWS::WebSocket<false, true, PerSocketData>* ws) {
+    try {
+        const auto& buttons = m_configManager.getButtons();
+        const auto& layout = m_configManager.getLayoutConfig(); // Get the layout object
+
+        // Construct the final message directly using the layout object
+        json initialStateJson;
+        initialStateJson["type"] = "initial_state";
+        initialStateJson["payload"]["buttons"] = buttons;
+        // Directly use the layout object; nlohmann will serialize map to [[key, value]] array
+        initialStateJson["payload"]["layout"] = layout; 
+
+        ws->send(initialStateJson.dump(), uWS::OpCode::TEXT);
+        std::cout << "[WS Server] Sent initial state to new client (pages as default array)." << std::endl;
+
+    } catch (const json::exception& e) {
+        std::cerr << "[WS Server] Error creating initial state JSON: " << e.what() << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "[WS Server] Error sending initial state: " << e.what() << std::endl;
+    }
+}
+
+// Handler for new WebSocket connections
+void WebSocketServer::on_open(uWS::WebSocket<false, true, PerSocketData>* ws) {
+    std::cout << "[WS Server] Client connected." << std::endl;
+    m_clients.push_back(ws);
+    sendInitialState(ws); // Send current config immediately
+}
+
+// Handler for incoming WebSocket messages
+void WebSocketServer::on_message(uWS::WebSocket<false, true, PerSocketData>* ws, std::string_view message, uWS::OpCode opCode) {
+    // std::cout << "[WS Server] Received message: " << message << std::endl;
+
+    if (opCode == uWS::OpCode::TEXT) {
+        try {
+            json payload = json::parse(message);
+            if (m_message_handler) {
+                // Pass the parsed JSON and isBinary=false to the external handler
+                m_message_handler(payload, false);
+            } else {
+                 std::cerr << "[WS Server] No message handler set to process message." << std::endl;
+            }
+        } catch (json::parse_error& e) {
+            std::cerr << "[WS Server] Failed to parse incoming JSON message: " << e.what() << std::endl;
+            // Optionally send an error back to the client
+            // ws->send(json{{"type", "error"}, {"message", "Invalid JSON format"}}.dump(), uWS::OpCode::TEXT);
+        } catch (const std::exception& e) {
+             std::cerr << "[WS Server] Error processing message: " << e.what() << std::endl;
+        }
+    } else if (opCode == uWS::OpCode::BINARY) {
+         std::cerr << "[WS Server] Received binary message (not currently handled)." << std::endl;
+         if (m_message_handler) {
+            // If a handler is set, maybe it expects binary? Pass an empty JSON and true.
+            // Adjust this if binary messages need specific handling.
+            m_message_handler(json{}, true);
+         }
+    } else {
+        // Handle other opcodes like PING, PONG, CLOSE if necessary
+    }
+}
+
+// Handler for WebSocket disconnections
+void WebSocketServer::on_close(uWS::WebSocket<false, true, PerSocketData>* ws, int code, std::string_view message) {
+    std::cout << "[WS Server] Client disconnected. Code: " << code << ", Message: " << message << std::endl;
+    // Remove the disconnected client from the list
+    m_clients.erase(std::remove(m_clients.begin(), m_clients.end(), ws), m_clients.end());
+}
+
+// Helper function to broadcast a message to all connected clients
+void WebSocketServer::broadcast(const std::string& message) {
+    // std::cout << "[WS Server] Broadcasting message: " << message << std::endl;
+    for (auto* client : m_clients) {
+        // Check if the socket is still valid/subscribed before sending
+        // Note: uWS doesn't provide a direct is_valid() check easily here.
+        // Proper pub/sub might be better for robust broadcasting.
+        client->send(message, uWS::OpCode::TEXT);
+    }
+}
+
+// Register WebSocket specific handlers with the uWS App
+void WebSocketServer::registerWebSocketHandlers(uWS::App* app) {
+    if (!app) return;
+
+    // Define WebSocket behavior using the PerSocketData struct (though it's empty now)
+    app->ws<PerSocketData>(NetworkConstants::WEBSOCKET_PATH, {
+        // Settings
+        .compression = uWS::SHARED_COMPRESSOR,
+        .maxPayloadLength = 16 * 1024 * 1024, // Example: 16MB
+        .idleTimeout = 600, // Example: 10 minutes
+        .maxBackpressure = 1 * 1024 * 1024, // Example: 1MB
+
+        // Handlers using member functions via lambda capture
+        .open = [this](auto *ws) {
+            // Cast ws->getUserData() if needed, but PerSocketData is empty
+            this->on_open(ws);
+        },
+        .message = [this](auto *ws, std::string_view message, uWS::OpCode opCode) {
+            this->on_message(ws, message, opCode);
+        },
+        .drain = [](auto *ws) {
+            // Check ws->getBufferedAmount() here
+            // std::cout << "[WS Server] Drain event. Buffered amount: " << ws->getBufferedAmount() << std::endl;
+        },
+        .ping = [](auto *ws, std::string_view message) {
+             // std::cout << "[WS Server] Ping received." << std::endl;
+        },
+        .pong = [](auto *ws, std::string_view message) {
+             // std::cout << "[WS Server] Pong received." << std::endl;
+        },
+        .close = [this](auto *ws, int code, std::string_view message) {
+           this->on_close(ws, code, message);
+        }
+    });
+
+     std::cout << "[WS Server] WebSocket handlers registered for path: " << NetworkConstants::WEBSOCKET_PATH << std::endl;
 } 

@@ -8,7 +8,9 @@ const ui = (() => {
     const connectionStatusDiv = document.getElementById('connection-status');
 
     let currentPageIndex = 0;
-    let currentButtonLayout = null; // Store the layout data
+    let currentLayout = null; // Store the entire layout object
+    let buttonsById = {};     // Store buttons indexed by ID for quick lookup
+    let isPortraitMode = false; // Track orientation
 
     // Touch swipe state variables
     let touchStartX = 0;
@@ -16,284 +18,318 @@ const ui = (() => {
     let isSwiping = false;
     const swipeThreshold = 50; // Minimum pixels to be considered a swipe
 
-    // --- Button Loading Logic --- 
-    function loadButtons(buttonLayout = null) {
-        // Store the layout data if provided, otherwise use existing stored data
-        if (buttonLayout !== null) {
-             currentButtonLayout = buttonLayout; 
+    // --- Initialization Function --- 
+    function loadInitialData(buttons = [], layout = null) {
+        console.log("UI: Loading initial data...");
+        currentLayout = layout;
+        // Convert button array to an object indexed by ID
+        buttonsById = buttons.reduce((map, btn) => {
+            map[btn.id] = btn;
+            return map;
+        }, {});
+
+        // Reset common UI state
+        currentPageIndex = 0;
+        updateUILayout(); // Call central layout update function
+    }
+
+    // --- Central Layout Update Function ---
+    function updateUILayout() {
+        console.log("UI: Updating layout based on orientation...");
+        isPortraitMode = window.matchMedia("(orientation: portrait)").matches;
+        console.log(`UI: Orientation is ${isPortraitMode ? 'Portrait' : 'Landscape'}`);
+
+        // Reset grid before rendering
+        buttonGrid.innerHTML = '';
+        buttonGrid.className = 'button-grid'; // Base class
+        buttonGrid.style.cssText = ''; // Reset inline styles
+        paginationDotsContainer.innerHTML = '';
+        paginationDotsContainer.style.display = 'none';
+        removeSwipeListeners(); // Remove listeners by default
+
+        if (!currentLayout || !buttonsById) {
+             console.error("UI: Missing layout or button data for rendering.");
+             buttonGrid.innerHTML = 'Error: Missing data.';
+             return;
         }
 
-        // --- Reset State --- 
-        buttonGrid.innerHTML = ''; 
-        paginationDotsContainer.innerHTML = '';
-        paginationDotsContainer.style.display = 'none'; 
-        currentPageIndex = 0; 
-        buttonGrid.className = ''; // Reset classes
-        buttonGrid.style.cssText = ''; // Reset inline styles
-        // Remove potential old listeners before deciding layout
-        removeSwipeListeners(); 
 
-        // Check if we have layout data to work with
-        if (!currentButtonLayout || currentButtonLayout.length === 0) {
-            console.log("No button layout available to load.");
-            buttonGrid.innerHTML = 'No buttons configured.'; // Clear grid and show message
+        if (isPortraitMode) {
+            renderPortraitGrid();
+            // No pagination or swipe in portrait mode
+        } else {
+            renderLandscapeGrid(); // Use the dynamic layout for landscape
+            // Setup pagination/swipe only if needed in landscape
+            if (currentLayout && currentLayout.page_count > 1) {
+                setupPagination(currentLayout.page_count);
+                addSwipeListeners();
+            }
+        }
+    }
+
+
+    // --- Portrait Grid Rendering ---
+    function renderPortraitGrid() {
+        console.log("UI: Rendering Portrait Grid (3 columns)");
+        const allButtons = Object.values(buttonsById); // Get all button data
+        const totalButtons = allButtons.length;
+        const cols = 3;
+        const rows = Math.ceil(totalButtons / cols);
+
+        buttonGrid.style.setProperty('--grid-rows', rows);
+        buttonGrid.style.setProperty('--grid-cols', cols);
+        buttonGrid.style.display = 'grid';
+        buttonGrid.style.gridTemplateRows = `repeat(${rows}, auto)`; // Auto height for rows
+        buttonGrid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+        buttonGrid.classList.add('portrait-grid'); // Add specific class if needed
+
+        allButtons.forEach(buttonData => {
+            const cell = document.createElement('div');
+            cell.className = 'grid-cell';
+            const btnElement = createButtonElement(buttonData);
+            cell.appendChild(btnElement);
+            buttonGrid.appendChild(cell);
+        });
+         console.log(`UI: Finished rendering portrait grid (${rows}x${cols})`);
+    }
+
+
+    // --- Landscape Grid Rendering (Dynamic Layout) ---
+    function renderLandscapeGrid() {
+         if (!currentLayout || !buttonsById || !currentLayout.pages || !Array.isArray(currentLayout.pages)) {
+            console.error(`UI: Cannot render landscape page ${currentPageIndex}, invalid layout or buttons data.`);
+            buttonGrid.innerHTML = `Error: Invalid layout data for landscape.`;
             return;
         }
 
-        const isPortrait = window.matchMedia("(orientation: portrait)").matches;
-        // Use the stored layout data
-        const needsPagination = currentButtonLayout.length > config.buttonsPerPage && !isPortrait;
+        const pagesArray = currentLayout.pages;
+        const pageDataEntry = pagesArray.find(entry => entry && entry[0] === currentPageIndex);
+        const pageLayout = pageDataEntry ? pageDataEntry[1] : null;
 
-        console.log(`Reloading layout - isPortrait: ${isPortrait}, needsPagination: ${needsPagination}`);
-
-        if (needsPagination) {
-            loadButtonsPaged(currentButtonLayout); 
-            addSwipeListeners(); // Add swipe listeners only for paged layout
-        } else {
-            loadButtonsSimpleGrid(currentButtonLayout, isPortrait);
-             // Ensure listeners removed if switching from paged
-             removeSwipeListeners();
+        if (!pageLayout) {
+            console.error(`UI: Could not find layout data for page index ${currentPageIndex} in pages array.`);
+            buttonGrid.innerHTML = `Error: Layout for page ${currentPageIndex} not found.`;
+            return;
         }
-    }
 
-    // --- Simple Grid Loading --- 
-    function loadButtonsSimpleGrid(buttonLayout, isPortrait) {
-        console.log(`Loading simple grid (Portrait: ${isPortrait})`);
-        buttonGrid.classList.remove('paginated');
-        buttonGrid.classList.toggle('landscape-simple-grid', !isPortrait);
-        
-        buttonLayout.forEach(button => {
-            if (!button.id || !button.name) return; 
-            const btnElement = createButtonElement(button); 
-            btnElement.style.aspectRatio = ''; 
-            buttonGrid.appendChild(btnElement);
-        });
-    }
+        console.log(`UI: Rendering landscape layout for page ${currentPageIndex}`);
+        buttonGrid.innerHTML = ''; // Clear previous content of grid
 
-    // --- Paged Grid Loading --- 
-    function loadButtonsPaged(buttonLayout) {
-        console.log("Loading paged layout.");
-        buttonGrid.classList.add('paginated');
-        buttonGrid.classList.remove('landscape-simple-grid'); 
-        
-        const totalPages = Math.ceil(buttonLayout.length / config.buttonsPerPage);
-        const pagesContainer = document.createElement('div');
-        pagesContainer.className = 'button-pages-container';
-        buttonGrid.appendChild(pagesContainer);
+        const { rows_per_page, cols_per_page } = currentLayout;
 
-        for (let i = 0; i < totalPages; i++) {
-            const pageElement = document.createElement('div');
-            pageElement.className = 'button-page'; 
-            pagesContainer.appendChild(pageElement);
-            pageElement.id = `button-page-${i}`;
+        buttonGrid.style.setProperty('--grid-rows', rows_per_page);
+        buttonGrid.style.setProperty('--grid-cols', cols_per_page);
+        buttonGrid.style.display = 'grid';
+        buttonGrid.style.gridTemplateRows = `repeat(${rows_per_page}, 1fr)`;
+        buttonGrid.style.gridTemplateColumns = `repeat(${cols_per_page}, 1fr)`;
+        buttonGrid.classList.remove('portrait-grid'); // Ensure portrait class is removed
 
-            const pageButtons = buttonLayout.slice(i * config.buttonsPerPage, (i + 1) * config.buttonsPerPage);
-            pageButtons.forEach(button => {
-                if (!button.id || !button.name) return; 
-                const btnElement = createButtonElement(button); 
-                btnElement.style.aspectRatio = '1 / 1'; 
-                pageElement.appendChild(btnElement);
-            });
-        }
-        
-        if (totalPages > 1) {
-            paginationDotsContainer.style.display = 'flex'; 
-            for (let i = 0; i < totalPages; i++) {
-                 const dot = document.createElement('span');
-                 dot.className = 'dot';
-                 dot.dataset.pageIndex = i;
-                 dot.onclick = () => goToPage(i);
-                 paginationDotsContainer.appendChild(dot);
+        for (let r = 0; r < rows_per_page; r++) {
+            for (let c = 0; c < cols_per_page; c++) {
+                const cell = document.createElement('div');
+                cell.className = 'grid-cell';
+                const buttonId = pageLayout[r]?.[c];
+                if (buttonId && buttonsById[buttonId]) {
+                    const buttonData = buttonsById[buttonId];
+                    const btnElement = createButtonElement(buttonData);
+                    cell.appendChild(btnElement);
+                }
+                buttonGrid.appendChild(cell);
             }
-            updatePaginationDots(); 
-        } 
-        goToPage(0);
+        }
+        console.log(`UI: Finished rendering landscape page ${currentPageIndex}`);
     }
 
-    // --- Helper: Create Button Element --- 
-    function createButtonElement(button) {
+    // --- Helper: Create Button Element ---
+    function createButtonElement(buttonData) {
         const btnElement = document.createElement('button');
         btnElement.className = 'grid-button';
-        btnElement.onclick = () => window.websocketService.sendButtonPress(button.id);
+        btnElement.dataset.buttonId = buttonData.id; // Store ID for potential use
+        btnElement.onclick = () => window.websocketService.sendButtonPress(buttonData.id);
 
-        if (button.icon_path && button.icon_path.trim() !== '') {
+        // Handle Icon Path - Ensure it starts with '/' if relative
+        let iconPath = buttonData.icon_path || '';
+        if (iconPath && !iconPath.startsWith('/') && !iconPath.startsWith('http')) {
+             // Basic check to prepend slash if it looks relative to assets
+             if(iconPath.startsWith('assets/')) {
+                 iconPath = '/' + iconPath;
+             }
+             // Add more robust path handling if necessary
+        }
+
+        if (iconPath) {
             btnElement.classList.add('has-icon');
             const imgElement = document.createElement('img');
-            imgElement.src = button.icon_path; 
-            imgElement.alt = button.name;
+            imgElement.src = iconPath;
+            imgElement.alt = buttonData.name;
             imgElement.onerror = () => {
-                console.error(`Failed to load icon: ${button.icon_path}`);
-                imgElement.remove();
+                console.error(`Failed to load icon: ${iconPath}`);
+                imgElement.remove(); // Remove broken image icon
+                // Ensure text is visible if icon fails
                 if (!btnElement.querySelector('.button-text')) {
-                     const textElementFallback = document.createElement('span');
-                     textElementFallback.className = 'button-text';
-                     textElementFallback.textContent = button.name;
-                     btnElement.appendChild(textElementFallback);
+                    const textElementFallback = document.createElement('span');
+                    textElementFallback.className = 'button-text';
+                    textElementFallback.textContent = buttonData.name;
+                    btnElement.appendChild(textElementFallback);
                 }
             };
             btnElement.appendChild(imgElement);
 
+            // Add text label below/beside icon (adjust CSS as needed)
             const textElement = document.createElement('span');
             textElement.className = 'button-text';
-            textElement.textContent = button.name;
+            textElement.textContent = buttonData.name;
             btnElement.appendChild(textElement);
+
         } else {
-            btnElement.textContent = button.name;
+            // No icon, just text
+            const textElement = document.createElement('span');
+            textElement.className = 'button-text';
+            textElement.textContent = buttonData.name;
+            btnElement.appendChild(textElement);
         }
         return btnElement;
     }
 
-    // --- Touch Swipe Handling --- 
-    function addSwipeListeners() {
-        console.log("Adding swipe listeners");
-        buttonGrid.addEventListener('touchstart', handleTouchStart, { passive: true }); // Use passive for start
-        buttonGrid.addEventListener('touchmove', handleTouchMove, { passive: false }); // Need false to preventDefault
-        buttonGrid.addEventListener('touchend', handleTouchEnd, { passive: true });
+    // --- Pagination Setup ---
+    function setupPagination(totalPages) {
+        paginationDotsContainer.innerHTML = ''; // Clear existing dots
+        if (totalPages > 1) {
+            paginationDotsContainer.style.display = 'flex';
+            for (let i = 0; i < totalPages; i++) {
+                const dot = document.createElement('span');
+                dot.className = 'dot';
+                dot.dataset.pageIndex = i;
+                dot.onclick = () => goToPage(i);
+                paginationDotsContainer.appendChild(dot);
+            }
+            updatePaginationDots();
+        } else {
+            paginationDotsContainer.style.display = 'none';
+        }
     }
 
+
+    // --- Touch Swipe Handling --- 
+    function addSwipeListeners() {
+        // console.log("Adding swipe listeners");
+        buttonGrid.addEventListener('touchstart', handleTouchStart, { passive: true });
+        buttonGrid.addEventListener('touchmove', handleTouchMove, { passive: false });
+        buttonGrid.addEventListener('touchend', handleTouchEnd, { passive: true });
+     }
     function removeSwipeListeners() {
-        console.log("Removing swipe listeners");
+        // console.log("Removing swipe listeners");
         buttonGrid.removeEventListener('touchstart', handleTouchStart);
         buttonGrid.removeEventListener('touchmove', handleTouchMove);
         buttonGrid.removeEventListener('touchend', handleTouchEnd);
-    }
-
+     }
     function handleTouchStart(event) {
-        // Ignore multi-touch or if not in paginated mode
-        if (event.touches.length > 1 || !buttonGrid.classList.contains('paginated')) return;
+        if (event.touches.length > 1 || !currentLayout || currentLayout.page_count <= 1 || isPortraitMode) return; // Added isPortraitMode check
         touchStartX = event.touches[0].clientX;
-        touchMoveX = touchStartX; // Initialize moveX
-        isSwiping = false; // Reset swipe flag
-        // console.log('Touch Start:', touchStartX);
-    }
-
+        touchMoveX = touchStartX;
+        isSwiping = false;
+     }
     function handleTouchMove(event) {
-         // Ignore multi-touch or if not in paginated mode
-        if (event.touches.length > 1 || !buttonGrid.classList.contains('paginated')) return;
-       
+        if (event.touches.length > 1 || !currentLayout || currentLayout.page_count <= 1 || isPortraitMode) return; // Added isPortraitMode check
         touchMoveX = event.touches[0].clientX;
         const deltaX = touchMoveX - touchStartX;
-        
-        // If significant horizontal movement, start considering it a swipe
-        // and prevent vertical scrolling.
-        if (Math.abs(deltaX) > 10 && !isSwiping) { 
-             console.log("Swipe detected, preventing vertical scroll");
-             isSwiping = true;
+        if (Math.abs(deltaX) > 10 && !isSwiping) {
+            isSwiping = true;
         }
-        
         if (isSwiping) {
-            // Prevent default only when actively swiping horizontally
-            event.preventDefault(); 
+            event.preventDefault();
         }
-        // console.log('Touch Move:', touchMoveX);
-    }
-
+     }
     function handleTouchEnd(event) {
-        // console.log('Touch End:', touchMoveX);
-         // Ignore if not in paginated mode or wasn't a swipe
-        if (!buttonGrid.classList.contains('paginated') || !isSwiping) { 
+        if (!currentLayout || currentLayout.page_count <= 1 || !isSwiping || isPortraitMode) { // Added isPortraitMode check
             resetSwipeState();
             return;
         }
-
         const deltaX = touchMoveX - touchStartX;
-        const totalPages = buttonGrid.querySelectorAll('.button-page').length;
-
-        // console.log('DeltaX:', deltaX);
-
+        const totalPages = currentLayout.page_count;
         if (deltaX < -swipeThreshold) {
-            // Swipe Left (Next Page)
-            console.log("Swipe Left occurred");
             goToPage(Math.min(currentPageIndex + 1, totalPages - 1));
         } else if (deltaX > swipeThreshold) {
-            // Swipe Right (Previous Page)
-            console.log("Swipe Right occurred");
             goToPage(Math.max(currentPageIndex - 1, 0));
-        } else {
-             console.log("Swipe distance below threshold");
         }
-
         resetSwipeState();
-    }
-    
+     }
     function resetSwipeState() {
         touchStartX = 0;
         touchMoveX = 0;
         isSwiping = false;
-    }
+     }
 
-    // --- Pagination Navigation (Show/Hide Logic) --- 
+    // --- Page Navigation --- 
     function goToPage(pageIndex) {
-        const pages = buttonGrid.querySelectorAll('.button-page'); 
-        if (pages.length === 0) return;
+        if (isPortraitMode || !currentLayout) return; // Only allow page change in landscape
+        const totalPages = currentLayout.page_count;
 
-        const totalPages = pages.length;
-        if (pageIndex < 0 || pageIndex >= totalPages) {
-            console.warn(`Invalid page index: ${pageIndex}`);
-            pageIndex = Math.max(0, Math.min(pageIndex, totalPages - 1));
+        if (pageIndex < 0 || pageIndex >= totalPages || pageIndex === currentPageIndex) {
+            return;
         }
 
-        // Check if page actually changed before toggling classes
-        if(pageIndex === currentPageIndex && pages[pageIndex]?.classList.contains('active')) {
-            // console.log("Already on target page:", pageIndex);
-            return; // Avoid unnecessary DOM manipulation if already on the target page
-        }
-
-        console.log(`Going to page: ${pageIndex}`);
+        console.log(`UI: Changing page from ${currentPageIndex} to ${pageIndex}`);
         currentPageIndex = pageIndex;
-
-        pages.forEach((page, index) => {
-            page.classList.toggle('active', index === currentPageIndex);
-        });
-        
+        renderLandscapeGrid(); // Call landscape renderer
         updatePaginationDots();
     }
 
-    // --- Update Pagination Dots --- 
+    // --- Update Pagination Dots ---
     function updatePaginationDots() {
         const dots = paginationDotsContainer.querySelectorAll('.dot');
         dots.forEach((dot, index) => {
             dot.classList.toggle('active', index === currentPageIndex);
         });
-        paginationDotsContainer.style.display = dots.length > 1 ? 'flex' : 'none'; 
-    }
+     }
 
-    // --- Fullscreen --- 
+    // --- Full Screen ---
     function toggleFullScreen() {
         if (!document.fullscreenElement) {
-            if (document.documentElement.requestFullscreen) {
-                document.documentElement.requestFullscreen();
-            } else if (document.documentElement.webkitRequestFullscreen) { /* Safari */
-                document.documentElement.webkitRequestFullscreen();
-            } else if (document.documentElement.msRequestFullscreen) { /* IE11 */
-                document.documentElement.msRequestFullscreen();
-            }
+            document.documentElement.requestFullscreen().catch(err => {
+                alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+            });
         } else {
             if (document.exitFullscreen) {
                 document.exitFullscreen();
-            } else if (document.webkitExitFullscreen) { /* Safari */
-                document.webkitExitFullscreen();
-            } else if (document.msExitFullscreen) { /* IE11 */
-                document.msExitFullscreen();
             }
         }
     }
 
-    // --- Initialization --- 
+    // --- Initialization ---
     function init() {
-        if (appTitle) {
-            appTitle.addEventListener('click', toggleFullScreen);
+        console.log("UI Module Initialized");
+
+        // <<< ADDED: Add click listener for the title to toggle fullscreen >>>
+        const appTitleElement = document.getElementById('app-title'); // Assuming the title has id="app-title"
+        if (appTitleElement) {
+            appTitleElement.addEventListener('click', toggleFullScreen);
+            console.log("UI: Added fullscreen toggle listener to title.");
+        } else {
+            console.warn("UI: Could not find element with id 'app-title' to attach fullscreen toggle.");
         }
-        // WebSocket connection initiated from main.js
+        // <<< END OF ADDED CODE >>>
+
+        // Use a library or more robust check if needed
+        const debouncedLayoutUpdate = debounce(updateUILayout, 250);
+        window.addEventListener('resize', debouncedLayoutUpdate);
+        // Use orientationchange where available, fallback to resize
+        if ('orientation' in window) {
+            window.addEventListener('orientationchange', debouncedLayoutUpdate);
+        } else {
+             // Resize listener already added
+        }
+
+        // Initial message
+        buttonGrid.innerHTML = 'Connecting to server...';
     }
 
-    // --- Public API --- 
+    // --- Public API ---
     return {
         init,
-        loadButtons,
-        connectionStatusDiv
+        loadInitialData, // Exposed function to load data
+        toggleFullScreen
     };
-
 })();
 
 window.uiModule = ui; 
