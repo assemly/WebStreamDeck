@@ -39,13 +39,60 @@ const ui = (() => {
         isPortraitMode = window.matchMedia("(orientation: portrait)").matches;
         console.log(`UI: Orientation is ${isPortraitMode ? 'Portrait' : 'Landscape'}`);
 
+        // --- Calculate Available Height for Button Grid ---
+        let availableHeight = window.innerHeight;
+        const headerElement = document.querySelector('header'); // <<< CHANGED: Select by tag name
+        const paginationElement = document.getElementById('pagination-dots');
+        let paginationHeight = 0;
+
+        if (headerElement) {
+            availableHeight -= headerElement.offsetHeight;
+            // console.log(`Header height: ${headerElement.offsetHeight}`);
+        } else {
+            console.warn("UI: Header element (<header>) not found for height calculation."); // Updated warning message
+        }
+
+        // Check if pagination should be displayed (landscape, multiple pages)
+        const needsPagination = !isPortraitMode && currentLayout && currentLayout.page_count > 1;
+
+        if (needsPagination && paginationElement) {
+            // Temporarily ensure pagination is visible to measure its height accurately
+            const originalDisplay = paginationElement.style.display;
+            paginationElement.style.display = 'flex'; // Or its default visible display style
+            paginationHeight = paginationElement.offsetHeight;
+            paginationElement.style.display = originalDisplay; // Restore original display (setupPagination will handle final state)
+            // console.log(`Pagination height: ${paginationHeight}`);
+        } else if (paginationElement) {
+             paginationElement.style.display = 'none'; // Ensure it's hidden if not needed
+        }
+
+        availableHeight -= paginationHeight;
+
+        // Account for grid padding (adjust value as needed or remove if using border-box)
+        const gridPaddingTop = 8;    // Example padding value from CSS
+        const gridPaddingBottom = 8; // Example padding value from CSS
+        availableHeight -= (gridPaddingTop + gridPaddingBottom);
+
+        // console.log(`Calculated available height for grid: ${availableHeight}`);
+
         // Reset grid before rendering
         buttonGrid.innerHTML = '';
         buttonGrid.className = 'button-grid'; // Base class
-        buttonGrid.style.cssText = ''; // Reset inline styles
+        buttonGrid.style.cssText = ''; // Reset inline styles specifically for height override later
+        // Set the calculated height
+        if (availableHeight > 0) {
+            buttonGrid.style.height = `${availableHeight}px`;
+             console.log(`UI: Set button-grid height to ${availableHeight}px`);
+        } else {
+            console.warn("UI: Calculated available height for grid is zero or negative.");
+            buttonGrid.style.height = 'auto'; // Fallback
+        }
+        // Reset pagination display (will be set correctly later if needed)
         paginationDotsContainer.innerHTML = '';
         paginationDotsContainer.style.display = 'none';
+
         removeSwipeListeners(); // Remove listeners by default
+
 
         if (!currentLayout || !buttonsById) {
              console.error("UI: Missing layout or button data for rendering.");
@@ -60,8 +107,8 @@ const ui = (() => {
         } else {
             renderLandscapeGrid(); // Use the dynamic layout for landscape
             // Setup pagination/swipe only if needed in landscape
-            if (currentLayout && currentLayout.page_count > 1) {
-                setupPagination(currentLayout.page_count);
+            if (needsPagination) { // Use the flag calculated earlier
+                setupPagination(currentLayout.page_count); // setupPagination will set display='flex' again
                 addSwipeListeners();
             }
         }

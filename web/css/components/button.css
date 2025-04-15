@@ -65,9 +65,11 @@
 
 /* <<< ADDED: Style for the grid cell container >>> */
 .grid-cell {
-
-}
-
+    display: flex;
+    justify-content: center;  /* 水平居中 */
+    align-items: center;      /* 垂直居中 */
+  }
+  
 /* Landscape Styles for Button Grid */
 @media (orientation: landscape) and (max-height: 600px) {
 
