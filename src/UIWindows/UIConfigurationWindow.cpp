@@ -92,7 +92,8 @@ void UIConfigurationWindow::scanPresetDirectory() {
                 std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
                 
                 if (extension == ".json") {
-                    m_presetFileNames.push_back(filepath.stem().string()); // Add filename without extension
+                    std::u8string u8Name = filepath.stem().u8string(); 
+                    m_presetFileNames.push_back(std::string(u8Name.begin(), u8Name.end()));
                 }
             }
         }

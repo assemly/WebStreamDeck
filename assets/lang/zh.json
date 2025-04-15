@@ -5,6 +5,7 @@
     "qr_code_window_title": "二维码",
     "add_new_button_header": "添加新按钮:",
     "button_id_label": "按钮 ID",
+    "select_icon_dialog_title": "选择图标",
     "button_name_label": "按钮名称",
     "action_type_label": "动作类型",
     "action_param_label": "动作参数",

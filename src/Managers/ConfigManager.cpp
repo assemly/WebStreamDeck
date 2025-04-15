@@ -10,8 +10,61 @@
 #include <string>   // Ensure string is included
 #include <map>      // Ensure map is included
 
+#ifdef _WIN32
+#include <windows.h> // Need this for MultiByteToWideChar
+#endif
+
 namespace fs = std::filesystem;
 using json = nlohmann::json;
+
+#ifdef _WIN32
+// Helper function to convert UTF-8 string to wstring (Windows specific)
+std::wstring Utf8ToWide(const std::string& utf8_str) {
+    if (utf8_str.empty()) {
+        return std::wstring();
+    }
+    // First, find the required buffer size
+    int required_size = MultiByteToWideChar(CP_UTF8, 0, utf8_str.c_str(), -1, NULL, 0);
+    if (required_size == 0) {
+        // Error handling: GetLastError() could provide more details
+        std::cerr << "Error: MultiByteToWideChar failed to get required size. Error code: " << GetLastError() << std::endl;
+        return std::wstring(); // Return empty string on error
+    }
+    // Allocate buffer and perform the conversion
+    std::wstring wide_str(required_size, 0);
+    int result = MultiByteToWideChar(CP_UTF8, 0, utf8_str.c_str(), -1, &wide_str[0], required_size);
+    if (result == 0) {
+        // Error handling
+        std::cerr << "Error: MultiByteToWideChar failed to convert string. Error code: " << GetLastError() << std::endl;
+        return std::wstring(); // Return empty string on error
+    }
+    // Remove the null terminator written by MultiByteToWideChar if size included it
+    if (!wide_str.empty() && wide_str.back() == L'\0') {
+         wide_str.pop_back();
+    }
+    return wide_str;
+}
+#else
+// Provide a stub or alternative implementation for non-Windows platforms if needed
+// For example, on Linux/macOS, std::filesystem often works directly with UTF-8
+std::wstring Utf8ToWide(const std::string& utf8_str) {
+    // Placeholder: On non-Windows, we might not need wstring conversion
+    // Or use a cross-platform library like ICU if complex conversion is needed
+    // For now, just return an empty wstring to avoid compilation errors elsewhere if used.
+    // A better approach would be to use #ifdefs where Utf8ToWide is called.
+    #warning "Utf8ToWide is not implemented for this platform. Filesystem path might handle UTF-8 directly." 
+    // This direct conversion might work on Linux/macOS with C++11 locale facets, but it's complex.
+    // std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    // try {
+    //     return converter.from_bytes(utf8_str);
+    // } catch (const std::range_error& e) {
+    //     std::cerr << "Error converting UTF-8 to wide string: " << e.what() << std::endl;
+    //     return std::wstring();
+    // }
+    // Let's return empty for now to highlight the platform difference.
+    return std::wstring();
+}
+#endif
 
 // Helper to initialize the layout structure with default empty grids
 void ConfigManager::initializeLayoutPages(LayoutConfig& layout) {
@@ -741,6 +794,19 @@ bool ConfigManager::saveConfigToPreset(const std::string& presetName) {
         return false;
     }
 
+    // Convert presetName (UTF-8) to wstring for path construction (Windows)
+    // <<< MODIFIED: Convert to wstring before building path >>>
+    #ifdef _WIN32
+    std::wstring presetNameWide = Utf8ToWide(presetName);
+    if (presetNameWide.empty() && !presetName.empty()) { // Check if conversion failed
+         std::cerr << "[ConfigManager] Error: Failed to convert preset name to wide string for path construction." << std::endl;
+         return false;
+    }
+    #else
+    // On non-Windows, assume std::filesystem::path handles UTF-8 std::string directly
+    const std::string& presetNameForPath = presetName;
+    #endif
+
     // Ensure the presets directory exists
     const std::string presetsDir = "assets/presetconfig";
     try {
@@ -756,14 +822,32 @@ bool ConfigManager::saveConfigToPreset(const std::string& presetName) {
         return false;
     }
 
-    // Construct the full path for the new preset file
-    std::string presetFilePath = presetsDir + "/" + presetName + ".json";
-    std::cout << "[ConfigManager] Attempting to save current configuration as preset: " << presetFilePath << std::endl;
+    // Construct the full path for the new preset file using std::filesystem::path
+    std::filesystem::path presetFsPath;
+    try {
+        // <<< MODIFIED: Use wide string components on Windows >>>
+        #ifdef _WIN32
+        std::wstring filenameWide = presetNameWide + L".json";
+        presetFsPath = std::filesystem::path(presetsDir) / filenameWide;
+        #else
+        // Use std::string directly on other platforms
+        presetFsPath = std::filesystem::path(presetsDir) / (presetNameForPath + ".json");
+        #endif
+    } catch (const std::exception& e) {
+        std::cerr << "[ConfigManager] Error constructing preset file path: " << e.what() << std::endl;
+        return false;
+    }
+    
+    // Convert path to string for logging *after* constructing the path object
+    // Note: .string() might not represent non-ASCII chars correctly in console on Windows
+    std::string presetFilePathStr = presetFsPath.string(); // For logging
+    std::cout << "[ConfigManager] Attempting to save current configuration as preset: " << presetFilePathStr << std::endl;
 
-    // Open the file for writing (this will create or overwrite)
-    std::ofstream presetFile(presetFilePath);
+    // Open the file for writing using the path object
+    // std::ofstream constructor taking std::filesystem::path should handle wide paths
+    std::ofstream presetFile(presetFsPath);
     if (!presetFile.is_open()) {
-        std::cerr << "[ConfigManager] Error: Could not open preset file for writing: " << presetFilePath << std::endl;
+        std::cerr << "[ConfigManager] Error: Could not open preset file for writing: " << presetFilePathStr << std::endl;
         return false;
     }
 
@@ -776,14 +860,14 @@ bool ConfigManager::saveConfigToPreset(const std::string& presetName) {
         presetFile << configJson.dump(4); // Pretty print
         presetFile.close();
 
-        std::cout << "[ConfigManager] Current configuration saved successfully as preset: " << presetFilePath << std::endl;
+        std::cout << "[ConfigManager] Current configuration saved successfully as preset: " << presetFilePathStr << std::endl;
         return true;
 
     } catch (json::exception& e) {
-        std::cerr << "[ConfigManager] Error creating JSON for preset file " << presetFilePath << ": " << e.what() << std::endl;
+        std::cerr << "[ConfigManager] Error creating JSON for preset file " << presetFilePathStr << ": " << e.what() << std::endl;
         return false;
     } catch (const std::exception& e) {
-         std::cerr << "[ConfigManager] An unknown error occurred while saving the preset file " << presetFilePath << ": " << e.what() << std::endl;
+         std::cerr << "[ConfigManager] An unknown error occurred while saving the preset file " << presetFilePathStr << ": " << e.what() << std::endl;
         return false;
     }
 } 

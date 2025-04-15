@@ -5,6 +5,7 @@
     "qr_code_window_title": "QR Code",
     "add_new_button_header": "Add New Button:",
     "button_id_label": "Button ID",
+    "select_icon_dialog_title": "Select Icon",
     "button_name_label": "Button Name",
     "action_type_label": "Action Type",
     "action_param_label": "Action Param",
