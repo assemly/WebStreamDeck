@@ -47,11 +47,21 @@ private:
     // <<< ADDED: Filter text for the select button popup >>>
     char m_selectButtonFilter[128] = "";
 
-    // <<< REMOVED: Variables related to adding a new button directly >>>
-    /*
-    bool m_openAddButtonPopup = false;
-    // ... rest of removed variables ...
-    */
+    // <<< ADDED: Declaration for extracted pagination drawing logic >>>
+    void DrawPaginationControls();
+
+    // <<< ADDED: Declaration for extracted grid cell drawing logic >>>
+    void DrawGridCells(const LayoutConfig& layout, const std::vector<std::vector<std::string>>& currentPageLayout, double currentTime);
+
+    // <<< ADDED: Declarations for extracted cell content drawing logic >>>
+    void DrawButtonInCell(const std::string& buttonId, int r, int c, double currentTime, const ImVec2& buttonSizeVec, bool& layoutChanged);
+    void DrawEmptyCell(int r, int c, const ImVec2& buttonSizeVec, bool& layoutChanged);
+
+    // <<< ADDED: Declarations for extracted button interaction logic >>>
+    void HandleButtonDragSource(const ButtonConfig& button, const ImVec2& buttonSizeVec);
+    void HandleButtonDropTarget(const std::string& currentButtonId, bool& layoutChanged);
+    void HandleButtonContextMenu(const std::string& buttonId, int r, int c);
+
 
     void releaseAnimatedGifTextures(); // Helper for GIF textures
 

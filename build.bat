@@ -2,7 +2,7 @@
 rem Set environment variables
 set VCPKG_TOOLCHAIN_FILE=C:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake
 set BUILD_DIR=build
-set BUILD_CONFIG=Debug
+set BUILD_CONFIG=Release
 
 echo Vcpkg Toolchain: %VCPKG_TOOLCHAIN_FILE%
 echo Build Directory: %BUILD_DIR%
