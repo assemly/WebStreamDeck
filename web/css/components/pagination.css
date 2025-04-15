@@ -1,105 +1,113 @@
 /* web/css/components/pagination.css */
 
-/* --- Pagination Styles (Only active in Landscape with > 18 buttons) --- */
-@media (orientation: landscape) and (max-height: 600px) {
+/* --- Pagination Styles (Applies only in landscape with enough buttons/pages) --- */
+/* We'll use JS to add/remove the 'paginated' class to #button-grid when needed */
 
-    /* Viewport (#button-grid when pagination active) */
-    #button-grid.paginated {
-        display: block; /* Override grid/simple grid */
-        overflow: hidden;
-        height: calc(100vh - 40px - 35px); /* CHANGED: Subtract 75px total */
-        padding: 0; /* No padding on viewport */
-        gap: 0;
-        grid-template-columns: none; /* Ensure grid layout is removed */
-        position: relative; /* Keep for absolutely positioned elements if any added later */
-        -webkit-overflow-scrolling: touch; /* ADDED: Improve momentum scrolling on iOS if swipe is added later */
-        background-color: #000; /* ADDED: Match page background */
-         /* Inherits margin-top, max-width from base landscape #button-grid */
-    }
+/* Viewport (#button-grid when pagination active) */
+#button-grid.paginated {
+    display: block; /* Override grid/simple grid */
+    overflow: hidden; /* CRITICAL: Hides other pages */
+    /* height calculation might need adjustment if header/footer heights change */
+    /* Example: height: calc(100vh - var(--header-height, 40px) - var(--footer-height, 30px)); */
+    height: 100%; /* Let the container handle height based on available space if possible */
+    padding: 0;
+    gap: 0;
+    grid-template-columns: none;
+    position: relative;
+    -webkit-overflow-scrolling: touch;
+    background-color: #1a1a1a; /* Match page background or body background */
+    /* Inherits margin-top, max-width from base landscape #button-grid styles */
+}
 
-    /* Pages Container */
-    .button-pages-container {
-        height: 100%;
-        /* Width is implicitly 100% of parent now */
-    }
+/* Pages Container - Holds all pages horizontally */
+.button-pages-container {
+    display: flex; /* Arrange pages side-by-side */
+    height: 100%;
+    /* Width is set dynamically via --page-count CSS variable */
+    width: calc(var(--page-count, 1) * 100%); 
+    /* Smooth transition for the transform property */
+    transition: transform 0.35s cubic-bezier(0.25, 0.8, 0.25, 1); 
+    /* Initial position set via --current-page-index CSS variable */
+    transform: translateX(calc(var(--current-page-index, 0) * -100% / var(--page-count, 1))); 
+}
 
-    /* Single Page - Default hidden, active shown as grid */
-    #button-grid.paginated .button-page {
-        display: none; /* Hide pages by default */
-        width: 100%; /* Take full width of container */
-        height: 100%;
-        grid-template-columns: repeat(6, 1fr); 
-        grid-template-rows: repeat(3, 1fr); 
-        gap: 5px;
-        padding: 5px;
-        box-sizing: border-box;
-        background-color: #000;
-        max-width: none; 
-    }
-    /* Show the active page as a grid */
-    #button-grid.paginated .button-page.active {
-        display: grid; 
-    }
+/* Single Page - Always displayed as grid, positioned by container */
+#button-grid.paginated .button-page {
+    display: grid; /* Always grid */
+    /* Width relative to the pages container */
+    width: calc(100% / var(--page-count, 1)); 
+    height: 100%;
+    flex-shrink: 0; /* Prevent pages from shrinking */
+    grid-template-columns: repeat(var(--grid-cols, 6), 1fr); /* Use CSS vars */
+    grid-template-rows: repeat(var(--grid-rows, 3), 1fr); /* Use CSS vars */
+    gap: 5px;
+    padding: 8px; /* Consistent padding */
+    box-sizing: border-box;
+    background-color: #1a1a1a; /* Match viewport background */
+    max-width: none;
+    /* Remove active class styling related to display */
+}
 
-    /* Button inside pagination page - Increase Specificity */
-    #button-grid.paginated .button-page .grid-button {
-        min-height: initial;
-        height: 100%;
-        width: auto; 
-        /* aspect-ratio: 1 / 1; Set via JS */
-        padding: 3px;
-        display: flex; 
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-        background-color: #000;
-        border: 1px solid #333;
-        margin: 0 auto;
-    }
+/* Button inside pagination page - styles remain similar */
+#button-grid.paginated .button-page .grid-button {
+    min-height: initial;
+    height: 100%;
+    width: 100%; /* Fill the grid cell */
+    padding: 3px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-color: #2c2c2c; /* Slightly different button background */
+    border: 1px solid #444;
+    border-radius: 5px; /* Add some rounding */
+    margin: 0;
+}
 
-    #button-grid.paginated .button-page .grid-button.has-icon img {
-        max-width: 65%;
-        max-height: 55%;
-        object-fit: contain;
-         margin-bottom: 2px;
-    }
+#button-grid.paginated .button-page .grid-button.has-icon img {
+    max-width: 65%;
+    max-height: 55%;
+    object-fit: contain;
+    margin-bottom: 3px;
+}
 
-    #button-grid.paginated .button-page .grid-button.has-icon .button-text {
-        font-size: 0.6em;
-        max-height: 30%;
-        line-height: 1;
-        overflow: hidden;
-    }
+#button-grid.paginated .button-page .grid-button.has-icon .button-text {
+    font-size: 0.65em; /* Slightly larger text */
+    max-height: 30%;
+    line-height: 1.1;
+    overflow: hidden;
+    text-align: center; /* Center text */
+    width: 95%; /* Prevent text overflow issues */
+}
 
-    /* Pagination Dots Container */
-    #pagination-dots {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        height: 30px;
-        display: flex; /* Hidden by default, JS shows if needed */
-        justify-content: center;
-        align-items: center;
-        background-color: #222;
-        z-index: 100;
-        box-sizing: border-box; /* ADDED: Ensure padding doesn't add height */
-    }
+/* Pagination Dots Container - Styles remain similar */
+#pagination-dots {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 30px;
+    display: flex; /* JS will control actual display based on page count */
+    justify-content: center;
+    align-items: center;
+    background-color: #222;
+    z-index: 100;
+    box-sizing: border-box;
+}
 
-    /* Individual Dots */
-    .dot {
-        height: 10px;
-        width: 10px;
-        background-color: #bbb;
-        border-radius: 50%;
-        display: inline-block;
-        margin: 0 5px;
-        cursor: pointer;
-        transition: background-color 0.3s ease;
-    }
+/* Individual Dots - Styles remain similar */
+.dot {
+    height: 10px;
+    width: 10px;
+    background-color: #bbb;
+    border-radius: 50%;
+    display: inline-block;
+    margin: 0 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
 
-    .dot.active {
-        background-color: #61afef;
-    }
+.dot.active {
+    background-color: #61afef;
 } 

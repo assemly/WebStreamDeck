@@ -22,14 +22,11 @@ const ui = (() => {
     function loadInitialData(buttons = [], layout = null) {
         console.log("UI: Loading initial data...");
         currentLayout = layout;
-        // Convert button array to an object indexed by ID
         buttonsById = buttons.reduce((map, btn) => {
             map[btn.id] = btn;
             return map;
         }, {});
-
-        // Reset common UI state
-        currentPageIndex = 0;
+        currentPageIndex = 0; // Reset page index
         updateUILayout(); // Call central layout update function
     }
 
@@ -105,121 +102,116 @@ const ui = (() => {
             renderPortraitGrid();
             // No pagination or swipe in portrait mode
         } else {
-            renderLandscapeGrid(); // Use the dynamic layout for landscape
-            // Setup pagination/swipe only if needed in landscape
-            if (needsPagination) { // Use the flag calculated earlier
-                setupPagination(currentLayout.page_count); // setupPagination will set display='flex' again
+            if (needsPagination) {
+                console.log("UI: Setting up paginated landscape view");
+                buttonGrid.classList.add('paginated');
+                // Set CSS variables for pagination/layout
+                const pageCount = currentLayout.page_count || 1;
+                const rows = currentLayout.rows_per_page || 3;
+                const cols = currentLayout.cols_per_page || 6;
+                buttonGrid.style.setProperty('--page-count', pageCount);
+                buttonGrid.style.setProperty('--current-page-index', currentPageIndex);
+                buttonGrid.style.setProperty('--grid-rows', rows);
+                buttonGrid.style.setProperty('--grid-cols', cols);
+
+                renderAllLandscapePages(currentLayout, buttonsById); // Render all pages for sliding
+                setupPagination(pageCount);
                 addSwipeListeners();
+            } else {
+                // Render non-paginated landscape (e.g., just the first page or use portrait layout)
+                console.log("UI: Setting up non-paginated landscape view (using first page)");
+                 // Option 1: Render only the first page like old landscape
+                 renderSingleLandscapePage(0); 
+                 // Option 2: Use the portrait renderer logic if acceptable
+                 // renderPortraitGrid(); 
             }
         }
     }
 
+    // --- NEW: Renders ALL pages for horizontal sliding ---
+    function renderAllLandscapePages(layout, buttons) {
+        console.log("UI: Rendering all landscape pages for sliding container");
+        buttonGrid.innerHTML = ''; // Clear grid first
 
-    // --- Portrait Grid Rendering ---
-    function renderPortraitGrid() {
-        console.log("UI: Rendering Portrait Grid (3 columns)");
-        buttonGrid.innerHTML = ''; // Clear previous buttons
+        const pagesContainer = document.createElement('div');
+        pagesContainer.className = 'button-pages-container';
 
-        // --- MODIFIED: Collect buttons based on layout order across all pages ---
-        const buttonsToRender = [];
-        if (!currentLayout || !currentLayout.pages || !Array.isArray(currentLayout.pages)) { // Added Array check
-            console.error("UI: Layout pages data is missing or not an array for portrait rendering.");
-            return; // Exit if layout is not available or invalid
+        if (!layout || !layout.pages || !Array.isArray(layout.pages)) {
+            console.error("UI: Invalid layout.pages data for renderAllLandscapePages");
+            buttonGrid.appendChild(pagesContainer); // Append empty container
+            return;
         }
         
-        // <<< MODIFIED: Correctly iterate over the array of [pageIndex, pageGrid] pairs >>>
-        // Sort the pages array based on the page index (first element of each pair)
-        const sortedPages = [...currentLayout.pages].sort((a, b) => a[0] - b[0]);
+        // Sort pages by index just in case
+        const sortedPages = [...layout.pages].sort((a, b) => a[0] - b[0]);
+        const rows = layout.rows_per_page;
+        const cols = layout.cols_per_page;
 
-        // Iterate through the sorted page entries
-        for (const pageEntry of sortedPages) {
-            const pageIndex = pageEntry[0]; // Optional: can use this in logs if needed
-            const pageLayout = pageEntry[1]; // Get the actual grid
-            if (!pageLayout) continue; // Skip if grid data is missing
 
-            for (let r = 0; r < pageLayout.length; r++) { // Iterate rows of the grid
-                const rowLayout = pageLayout[r];
-                if (!rowLayout) continue; // Skip if row data is missing
+        sortedPages.forEach(pageEntry => {
+            const pageIndex = pageEntry[0];
+            const pageLayout = pageEntry[1];
+            const pageElement = document.createElement('div');
+            pageElement.className = 'button-page';
+            pageElement.dataset.pageIndex = pageIndex; // Add data attribute for reference
 
-                for (let c = 0; c < rowLayout.length; c++) { // Iterate columns of the row
-                    const buttonId = rowLayout[c]; // Get the button ID
-                    // Check if buttonId exists, is a string, and is not empty after trimming
-                    if (buttonId && typeof buttonId === 'string' && buttonId.trim() !== "") { 
-                        const buttonData = buttonsById[buttonId];
-                        if (buttonData) {
-                            buttonsToRender.push(buttonData); // Add the button data if found
-                        } else {
-                            console.warn(`UI: Button ID '${buttonId}' found in layout page ${pageIndex}, but not in button definitions.`);
+            if (!pageLayout) {
+                console.warn(`UI: Missing layout data for page ${pageIndex}`);
+                // Optionally add placeholder content to the pageElement
+            } else {
+                 for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'grid-cell';
+                        const buttonId = pageLayout[r]?.[c]; // Safely access ID
+                        if (buttonId && typeof buttonId === 'string' && buttonId.trim() !== "" && buttons[buttonId]) {
+                            const buttonData = buttons[buttonId];
+                            const btnElement = createButtonElement(buttonData);
+                            cell.appendChild(btnElement);
+                        } else if (buttonId) {
+                             console.warn(`UI: Button ID '${buttonId}' found in layout page ${pageIndex}, but not in button definitions.`);
                         }
+                        pageElement.appendChild(cell);
                     }
                 }
             }
-        }
-        // <<< END OF MODIFICATION >>>
-
-        console.log(`UI: Collected ${buttonsToRender.length} buttons from layout for portrait view.`);
-
-        if (buttonsToRender.length === 0) {
-            console.log("UI: No buttons found in layout to render for portrait view.");
-            buttonGrid.style.display = 'none'; // Hide grid if empty
-            return;
-        }
-
-        // const allButtons = Object.values(buttonsById); // Get all button data - OLD WAY
-        // const totalButtons = allButtons.length;       // OLD WAY
-        const totalButtons = buttonsToRender.length;   // NEW WAY
-        const cols = 3;
-        const rows = Math.ceil(totalButtons / cols);
-
-        buttonGrid.style.setProperty('--grid-rows', rows);
-        buttonGrid.style.setProperty('--grid-cols', cols);
-        buttonGrid.style.display = 'grid';
-        buttonGrid.style.gridTemplateRows = `repeat(${rows}, auto)`; // Auto height for rows
-        buttonGrid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-        buttonGrid.classList.remove('paged-grid'); // Ensure paged class is removed
-        buttonGrid.classList.add('portrait-grid'); // Add specific class if needed
-
-        // --- MODIFIED: Iterate over buttonsToRender --- 
-        buttonsToRender.forEach(buttonData => {
-            const cell = document.createElement('div');
-            cell.className = 'grid-cell';
-            const btnElement = createButtonElement(buttonData);
-            cell.appendChild(btnElement);
-            buttonGrid.appendChild(cell);
+            pagesContainer.appendChild(pageElement);
         });
-        console.log(`UI: Finished rendering portrait grid (${rows}x${cols})`);
+
+        buttonGrid.appendChild(pagesContainer);
+         console.log("UI: Finished rendering all landscape pages into container.");
     }
 
-
-    // --- Landscape Grid Rendering (Dynamic Layout) ---
-    function renderLandscapeGrid() {
+    // --- ADDED: Renders a single landscape page (for non-paginated landscape) ---
+    function renderSingleLandscapePage(pageIndexToShow = 0) {
          if (!currentLayout || !buttonsById || !currentLayout.pages || !Array.isArray(currentLayout.pages)) {
-            console.error(`UI: Cannot render landscape page ${currentPageIndex}, invalid layout or buttons data.`);
-            buttonGrid.innerHTML = `Error: Invalid layout data for landscape.`;
+            console.error(`UI: Cannot render single landscape page ${pageIndexToShow}, invalid layout or buttons data.`);
+            buttonGrid.innerHTML = `Error: Invalid layout data.`;
             return;
         }
 
-        const pagesArray = currentLayout.pages;
-        const pageDataEntry = pagesArray.find(entry => entry && entry[0] === currentPageIndex);
+        const pageDataEntry = currentLayout.pages.find(entry => entry && entry[0] === pageIndexToShow);
         const pageLayout = pageDataEntry ? pageDataEntry[1] : null;
 
         if (!pageLayout) {
-            console.error(`UI: Could not find layout data for page index ${currentPageIndex} in pages array.`);
-            buttonGrid.innerHTML = `Error: Layout for page ${currentPageIndex} not found.`;
+            console.error(`UI: Could not find layout data for single page index ${pageIndexToShow}.`);
+            buttonGrid.innerHTML = `Error: Layout for page ${pageIndexToShow} not found.`;
             return;
         }
 
-        console.log(`UI: Rendering landscape layout for page ${currentPageIndex}`);
-        buttonGrid.innerHTML = ''; // Clear previous content of grid
+        console.log(`UI: Rendering single landscape layout for page ${pageIndexToShow}`);
+        buttonGrid.innerHTML = ''; // Clear previous content
 
         const { rows_per_page, cols_per_page } = currentLayout;
 
+        // Set CSS variables for the grid layout on the main container
         buttonGrid.style.setProperty('--grid-rows', rows_per_page);
         buttonGrid.style.setProperty('--grid-cols', cols_per_page);
-        buttonGrid.style.display = 'grid';
+        buttonGrid.style.display = 'grid'; // Use grid directly
         buttonGrid.style.gridTemplateRows = `repeat(${rows_per_page}, 1fr)`;
         buttonGrid.style.gridTemplateColumns = `repeat(${cols_per_page}, 1fr)`;
-        buttonGrid.classList.remove('portrait-grid'); // Ensure portrait class is removed
+        buttonGrid.classList.remove('paginated'); // Ensure paginated class is removed
+        buttonGrid.classList.remove('portrait-grid');
 
         for (let r = 0; r < rows_per_page; r++) {
             for (let c = 0; c < cols_per_page; c++) {
@@ -230,12 +222,83 @@ const ui = (() => {
                     const buttonData = buttonsById[buttonId];
                     const btnElement = createButtonElement(buttonData);
                     cell.appendChild(btnElement);
+                } else if (buttonId) { // Log warning if ID in layout but not in buttons
+                     console.warn(`UI: Button ID '${buttonId}' found in layout page ${pageIndexToShow}, but not in button definitions.`);
                 }
                 buttonGrid.appendChild(cell);
             }
         }
-        console.log(`UI: Finished rendering landscape page ${currentPageIndex}`);
+         console.log(`UI: Finished rendering single landscape page ${pageIndexToShow}`);
     }
+
+
+    // --- Portrait Grid Rendering (Scrollable vertical list) ---
+    function renderPortraitGrid() {
+        console.log("UI: Rendering Portrait Grid (3 columns)");
+        buttonGrid.innerHTML = ''; // Clear previous buttons
+        buttonGrid.classList.remove('paginated'); // Ensure paginated class is removed
+        buttonGrid.style.display = 'grid'; // Set display grid for portrait
+
+        const buttonsToRender = [];
+        if (!currentLayout || !currentLayout.pages || !Array.isArray(currentLayout.pages)) {
+            console.error("UI: Layout pages data is missing or not an array for portrait rendering.");
+            return;
+        }
+        
+        const sortedPages = [...currentLayout.pages].sort((a, b) => a[0] - b[0]);
+
+        for (const pageEntry of sortedPages) {
+            const pageIndex = pageEntry[0];
+            const pageLayout = pageEntry[1];
+            if (!pageLayout) continue;
+
+            for (let r = 0; r < pageLayout.length; r++) {
+                const rowLayout = pageLayout[r];
+                if (!rowLayout) continue;
+
+                for (let c = 0; c < rowLayout.length; c++) {
+                    const buttonId = rowLayout[c];
+                    if (buttonId && typeof buttonId === 'string' && buttonId.trim() !== "") {
+                        const buttonData = buttonsById[buttonId];
+                        if (buttonData) {
+                            buttonsToRender.push(buttonData);
+                        } else {
+                            console.warn(`UI: Button ID '${buttonId}' found in layout page ${pageIndex}, but not in button definitions.`);
+                        }
+                    }
+                }
+            }
+        }
+        console.log(`UI: Collected ${buttonsToRender.length} buttons from layout for portrait view.`);
+
+        if (buttonsToRender.length === 0) {
+            console.log("UI: No buttons found in layout to render for portrait view.");
+            buttonGrid.style.display = 'none';
+            return;
+        }
+
+        const totalButtons = buttonsToRender.length;
+        const cols = 3;
+        const rows = Math.ceil(totalButtons / cols);
+
+        // Set CSS vars for portrait grid
+        buttonGrid.style.setProperty('--grid-rows', rows);
+        buttonGrid.style.setProperty('--grid-cols', cols);
+        // grid-template definitions might need adjustments in portrait CSS
+        buttonGrid.style.gridTemplateRows = `repeat(${rows}, auto)`; 
+        buttonGrid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+        buttonGrid.classList.add('portrait-grid'); 
+
+        buttonsToRender.forEach(buttonData => {
+            const cell = document.createElement('div');
+            cell.className = 'grid-cell';
+            const btnElement = createButtonElement(buttonData);
+            cell.appendChild(btnElement);
+            buttonGrid.appendChild(cell);
+        });
+        console.log(`UI: Finished rendering portrait grid (${rows}x${cols})`);
+    }
+
 
     // --- Helper: Create Button Element ---
     function createButtonElement(buttonData) {
@@ -321,33 +384,40 @@ const ui = (() => {
         buttonGrid.removeEventListener('touchend', handleTouchEnd);
      }
     function handleTouchStart(event) {
-        if (event.touches.length > 1 || !currentLayout || currentLayout.page_count <= 1 || isPortraitMode) return; // Added isPortraitMode check
+        const needsPagination = !isPortraitMode && currentLayout && currentLayout.page_count > 1;
+        if (event.touches.length > 1 || !needsPagination) return; 
         touchStartX = event.touches[0].clientX;
         touchMoveX = touchStartX;
         isSwiping = false;
      }
     function handleTouchMove(event) {
-        if (event.touches.length > 1 || !currentLayout || currentLayout.page_count <= 1 || isPortraitMode) return; // Added isPortraitMode check
+         const needsPagination = !isPortraitMode && currentLayout && currentLayout.page_count > 1;
+        if (event.touches.length > 1 || !needsPagination) return; 
         touchMoveX = event.touches[0].clientX;
         const deltaX = touchMoveX - touchStartX;
         if (Math.abs(deltaX) > 10 && !isSwiping) {
             isSwiping = true;
         }
         if (isSwiping) {
-            event.preventDefault();
+            event.preventDefault(); // Prevent vertical scroll while swiping horizontally
         }
      }
     function handleTouchEnd(event) {
-        if (!currentLayout || currentLayout.page_count <= 1 || !isSwiping || isPortraitMode) { // Added isPortraitMode check
+        const needsPagination = !isPortraitMode && currentLayout && currentLayout.page_count > 1;
+        if (!isSwiping || !needsPagination) { 
             resetSwipeState();
             return;
         }
         const deltaX = touchMoveX - touchStartX;
         const totalPages = currentLayout.page_count;
         if (deltaX < -swipeThreshold) {
+            // Swipe Left - Go Next Page
             goToPage(Math.min(currentPageIndex + 1, totalPages - 1));
         } else if (deltaX > swipeThreshold) {
+            // Swipe Right - Go Prev Page
             goToPage(Math.max(currentPageIndex - 1, 0));
+        } else {
+            // Tap or insufficient swipe - do nothing regarding page change
         }
         resetSwipeState();
      }
@@ -359,16 +429,18 @@ const ui = (() => {
 
     // --- Page Navigation --- 
     function goToPage(pageIndex) {
-        if (isPortraitMode || !currentLayout) return; // Only allow page change in landscape
-        const totalPages = currentLayout.page_count;
+        const needsPagination = !isPortraitMode && currentLayout && currentLayout.page_count > 1;
+        if (!needsPagination) return; // Only allow page change if pagination is active
 
+        const totalPages = currentLayout.page_count;
         if (pageIndex < 0 || pageIndex >= totalPages || pageIndex === currentPageIndex) {
             return;
         }
 
         console.log(`UI: Changing page from ${currentPageIndex} to ${pageIndex}`);
         currentPageIndex = pageIndex;
-        renderLandscapeGrid(); // Call landscape renderer
+        // --- MODIFIED: Update CSS variable instead of re-rendering ---
+        buttonGrid.style.setProperty('--current-page-index', currentPageIndex);
         updatePaginationDots();
     }
 
@@ -419,6 +491,19 @@ const ui = (() => {
 
         // Initial message
         buttonGrid.innerHTML = 'Connecting to server...';
+    }
+
+    // Simple debounce function (include this or use a library)
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func.apply(this, args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
     }
 
     // --- Public API ---
