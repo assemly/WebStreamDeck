@@ -1,0 +1,4 @@
+#define IDI_ICON1 101 // Define an identifier for the icon
+
+// Include the icon file, using a relative path from the project root
+IDI_ICON1 ICON "assets/logo/logo.ico" 

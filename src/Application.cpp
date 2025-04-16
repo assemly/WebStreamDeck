@@ -27,6 +27,7 @@
 #include "Managers/TranslationManager.hpp"
 #include "Utils/InputUtils.hpp"
 #include "Utils/TextureLoader.hpp"
+#include "Utils/IconUtils.hpp" // Include the header for icon conversion
 
 
 static void glfw_error_callback(int error, const char* description)
@@ -156,6 +157,38 @@ bool Application::InitializePlatform() {
         return false;
     }
     glfwMakeContextCurrent(m_window);
+
+    // --- Set Window Icon (Windows only) --- 
+    #ifdef _WIN32
+    std::cout << "[Platform] Attempting to set window icon..." << std::endl;
+    HINSTANCE hInst = GetModuleHandleW(NULL);
+    // Load the icon resource using the ID defined in WebStreamDeck.rc (101)
+    HICON hIcon = LoadIconW(hInst, MAKEINTRESOURCEW(101)); 
+    if (hIcon) {
+        std::cout << "[Platform] Loaded icon resource handle." << std::endl;
+        // Convert HICON to RGBA pixels using our utility function
+        auto imageDataOpt = IconUtils::ConvertHIconToRGBA(hIcon);
+        if (imageDataOpt) {
+            std::cout << "[Platform] Converted icon to RGBA." << std::endl;
+            GLFWimage glfwImage;
+            glfwImage.width = imageDataOpt->width;
+            glfwImage.height = imageDataOpt->height;
+            glfwImage.pixels = imageDataOpt->pixels.data();
+
+            // Set the icon for the window
+            glfwSetWindowIcon(m_window, 1, &glfwImage);
+            std::cout << "[Platform] Window icon set successfully." << std::endl;
+        } else {
+            std::cerr << "[Platform] Failed to convert HICON to RGBA pixels." << std::endl;
+        }
+        // Destroy the loaded icon handle regardless of conversion success
+        DestroyIcon(hIcon);
+        std::cout << "[Platform] Destroyed icon resource handle." << std::endl;
+    } else {
+        std::cerr << "[Platform] Failed to load icon resource (ID: 101). Error: " << GetLastError() << std::endl;
+    }
+    #endif
+    // --- End Set Window Icon ---
 
     // Set window user pointer
     glfwSetWindowUserPointer(m_window, this);

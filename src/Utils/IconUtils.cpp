@@ -45,12 +45,162 @@ static void stbi_write_callback(void *context, void *data, int size) {
     fwrite(data, 1, size, (FILE*)context);
 }
 
+// --- New Function Implementation ---
+
+std::optional<ImageData> IconUtils::ConvertHIconToRGBA(HICON hIcon) {
+    if (!hIcon) {
+        std::cerr << "[IconUtils] ConvertHIconToRGBA: Received null HICON." << std::endl;
+        return std::nullopt;
+    }
+
+    ICONINFO iconInfo = {0};
+    bool success = false;
+    ImageData resultData;
+
+    std::cout << "[IconUtils] ConvertHIconToRGBA: Getting Icon Info..." << std::endl;
+    if (GetIconInfo(hIcon, &iconInfo)) {
+        // Wrap GDI objects for automatic cleanup using unique_ptr
+        struct GdiObjectDeleter { void operator()(HGDIOBJ obj) const { if (obj) DeleteObject(obj); } };
+        std::unique_ptr<void, GdiObjectDeleter> hbmColorGuard(iconInfo.hbmColor);
+        std::unique_ptr<void, GdiObjectDeleter> hbmMaskGuard(iconInfo.hbmMask);
+
+        if (iconInfo.hbmColor) {
+            BITMAP bmpColor = {0};
+            GetObject(iconInfo.hbmColor, sizeof(bmpColor), &bmpColor);
+            resultData.width = bmpColor.bmWidth;
+            resultData.height = bmpColor.bmHeight;
+            std::cout << "[IconUtils] ConvertHIconToRGBA: Icon dimensions: " << resultData.width << "x" << resultData.height << std::endl;
+
+            if (resultData.width <= 0 || resultData.height <= 0) {
+                 std::cerr << "[IconUtils] ConvertHIconToRGBA: Invalid icon dimensions." << std::endl;
+                 return std::nullopt; // Invalid dimensions
+            }
+
+            std::vector<unsigned char> colorPixels(resultData.width * resultData.height * 4);
+            HDC hdcScreen = GetDC(NULL);
+            if (!hdcScreen) {
+                 std::cerr << "[IconUtils] ConvertHIconToRGBA: GetDC(NULL) failed." << std::endl;
+                 return std::nullopt;
+            }
+
+            BITMAPINFO bmiColor = {0};
+            bmiColor.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+            bmiColor.bmiHeader.biWidth = resultData.width;
+            bmiColor.bmiHeader.biHeight = -resultData.height; // Request top-down DIB
+            bmiColor.bmiHeader.biPlanes = 1;
+            bmiColor.bmiHeader.biBitCount = 32; // Request 32-bit pixels (BGRA)
+            bmiColor.bmiHeader.biCompression = BI_RGB;
+
+            std::cout << "[IconUtils] ConvertHIconToRGBA: Getting color DIBits..." << std::endl;
+            if (GetDIBits(hdcScreen, (HBITMAP)iconInfo.hbmColor, 0, resultData.height, colorPixels.data(), &bmiColor, DIB_RGB_COLORS) > 0) {
+                std::cout << "[IconUtils] ConvertHIconToRGBA: Successfully got color DIBits." << std::endl;
+
+                if (iconInfo.hbmMask) {
+                    std::cout << "[IconUtils] ConvertHIconToRGBA: Mask bitmap (hbmMask) exists. Getting mask DIBits..." << std::endl;
+                    BITMAP bmpMask = {0};
+                    GetObject(iconInfo.hbmMask, sizeof(bmpMask), &bmpMask);
+
+                    HDC hdcMem = CreateCompatibleDC(hdcScreen);
+                    if (!hdcMem) {
+                        std::cerr << "[IconUtils] ConvertHIconToRGBA: CreateCompatibleDC failed." << std::endl;
+                        ReleaseDC(NULL, hdcScreen);
+                        return std::nullopt;
+                    }
+                    HBITMAP hbmOld = (HBITMAP)SelectObject(hdcMem, iconInfo.hbmMask);
+
+                    BITMAPINFO bmiMask = {0};
+                    bmiMask.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+                    bmiMask.bmiHeader.biWidth = resultData.width;
+                    bmiMask.bmiHeader.biHeight = -resultData.height; // Top-down DIB
+                    bmiMask.bmiHeader.biPlanes = 1;
+                    bmiMask.bmiHeader.biBitCount = 1; // Request 1-bit mask data
+                    bmiMask.bmiHeader.biCompression = BI_RGB;
+
+                    // Query size needed for mask bits
+                    GetDIBits(hdcMem, (HBITMAP)iconInfo.hbmMask, 0, resultData.height, NULL, &bmiMask, DIB_RGB_COLORS);
+                    DWORD maskSize = bmiMask.bmiHeader.biSizeImage;
+                    std::cout << "[IconUtils] ConvertHIconToRGBA: Calculated mask DIB size: " << maskSize << " bytes." << std::endl;
+
+                    if(maskSize > 0) {
+                        std::vector<unsigned char> maskPixels(maskSize);
+                        if (GetDIBits(hdcMem, (HBITMAP)iconInfo.hbmMask, 0, resultData.height, maskPixels.data(), &bmiMask, DIB_RGB_COLORS) > 0) {
+                            std::cout << "[IconUtils] ConvertHIconToRGBA: Successfully got mask DIBits." << std::endl;
+                            // Combine color and mask into final RGBA
+                            resultData.pixels.resize(resultData.width * resultData.height * 4);
+                            int maskBytesPerRow = (resultData.width + 31) / 32 * 4;
+
+                            for (int y = 0; y < resultData.height; ++y) {
+                                for (int x = 0; x < resultData.width; ++x) {
+                                    int rgbaIndex = (y * resultData.width + x) * 4;
+                                    int bgraIndex = rgbaIndex;
+                                    int maskByteIndex = (y * maskBytesPerRow) + (x / 8);
+                                    int maskBitIndex = 7 - (x % 8);
+
+                                    bool isTransparent = false;
+                                    if (maskByteIndex < maskPixels.size()) {
+                                         isTransparent = ((maskPixels[maskByteIndex] >> maskBitIndex) & 1);
+                                    }
+
+                                    resultData.pixels[rgbaIndex + 0] = colorPixels[bgraIndex + 2]; // B -> R
+                                    resultData.pixels[rgbaIndex + 1] = colorPixels[bgraIndex + 1]; // G -> G
+                                    resultData.pixels[rgbaIndex + 2] = colorPixels[bgraIndex + 0]; // R -> B
+                                    resultData.pixels[rgbaIndex + 3] = isTransparent ? 0 : 255;  // Alpha
+                                }
+                            }
+                            success = true;
+                            std::cout << "[IconUtils] ConvertHIconToRGBA: Successfully combined color and mask." << std::endl;
+                        } else {
+                             std::cerr << "[IconUtils] ConvertHIconToRGBA: GetDIBits failed for mask bitmap. Error: " << GetLastError() << std::endl;
+                        }
+                    } else {
+                         std::cerr << "[IconUtils] ConvertHIconToRGBA: Calculated mask size is zero or GetDIBits query failed." << std::endl;
+                    }
+                    SelectObject(hdcMem, hbmOld);
+                    DeleteDC(hdcMem);
+                } else {
+                     std::cerr << "[IconUtils] ConvertHIconToRGBA: IconInfo missing mask bitmap (hbmMask). Creating opaque image." << std::endl;
+                     // Fallback: Create fully opaque image if no mask exists
+                     resultData.pixels.resize(resultData.width * resultData.height * 4);
+                     for (int y = 0; y < resultData.height; ++y) {
+                         for (int x = 0; x < resultData.width; ++x) {
+                             int rgbaIndex = (y * resultData.width + x) * 4;
+                             resultData.pixels[rgbaIndex + 0] = colorPixels[rgbaIndex + 2]; // B -> R
+                             resultData.pixels[rgbaIndex + 1] = colorPixels[rgbaIndex + 1]; // G -> G
+                             resultData.pixels[rgbaIndex + 2] = colorPixels[rgbaIndex + 0]; // R -> B
+                             resultData.pixels[rgbaIndex + 3] = 255;                        // Alpha = Opaque
+                         }
+                     }
+                     success = true;
+                }
+            } else {
+                 std::cerr << "[IconUtils] ConvertHIconToRGBA: GetDIBits failed for color bitmap. Error: " << GetLastError() << std::endl;
+            }
+            ReleaseDC(NULL, hdcScreen);
+        } else {
+             std::cerr << "[IconUtils] ConvertHIconToRGBA: IconInfo missing color bitmap (hbmColor)." << std::endl;
+        }
+        // GDI objects hbmColor and hbmMask automatically cleaned up by unique_ptr guards
+    } else {
+        std::cerr << "[IconUtils] ConvertHIconToRGBA: GetIconInfo failed. Error: " << GetLastError() << std::endl;
+    }
+
+    if (success) {
+         std::cout << "[IconUtils] ConvertHIconToRGBA: Conversion successful." << std::endl;
+        return resultData;
+    } else {
+         std::cout << "[IconUtils] ConvertHIconToRGBA: Conversion failed." << std::endl;
+        return std::nullopt;
+    }
+}
+
+// --- Modified Existing Function --- 
+
 std::optional<std::string> IconUtils::ExtractAndSaveIconPng(
     const std::wstring& filePath,
     const std::string& outputDir,
     const std::string& desiredBaseName)
 {
-    std::cout << "[IconUtils] Attempting to extract icon for '" << desiredBaseName << "' from: "
+    std::cout << "[IconUtils] ExtractAndSaveIconPng: Attempting icon extraction for '" << desiredBaseName << "' from: "
               << StringUtils::WideToUtf8(filePath) << std::endl;
 
     // 1. Check/Create Output Directory
@@ -67,18 +217,14 @@ std::optional<std::string> IconUtils::ExtractAndSaveIconPng(
         return std::nullopt;
     }
 
-    // 2. Construct Full Output Path using generic_string for consistent separators
+    // 2. Construct Full Output Path
     fs::path fullPath = fs::path(outputDir) / (desiredBaseName + ".png");
-    std::string outputPathUtf8 = fullPath.generic_string(); // UTF-8 for return/logging
-    std::cout << "[IconUtils] Target output path (generic UTF-8): " << outputPathUtf8 << std::endl;
-
+    std::string outputPathUtf8 = fullPath.generic_string();
+    std::cout << "[IconUtils] ExtractAndSaveIconPng: Target output path: " << outputPathUtf8 << std::endl;
 
     HICON hIcon = NULL;
-    int iconWidth = 0;
-    int iconHeight = 0;
-    std::vector<unsigned char> pixels;
 
-    // --- Step 3: Extract HICON based on file type ---
+    // --- Step 3: Extract HICON based on file type --- 
     fs::path inputPath(filePath);
     std::wstring extension = inputPath.has_extension() ? StringUtils::ToLowerW(inputPath.extension().wstring()) : L"";
 
@@ -191,209 +337,55 @@ std::optional<std::string> IconUtils::ExtractAndSaveIconPng(
         // CoUninitialize is handled by CoInitializer destructor
          std::cout << "[IconUtils] COM scope finished for LNK handling." << std::endl;
     } else {
-         std::cerr << "[IconUtils] Unsupported file type for icon extraction: " << StringUtils::WideToUtf8(filePath) << std::endl;
+         std::cerr << "[IconUtils] ExtractAndSaveIconPng: Unsupported file type: " << StringUtils::WideToUtf8(filePath) << std::endl;
     }
 
     if (!hIcon) {
-        std::cerr << "[IconUtils] Failed to obtain a valid icon handle (HICON) after processing." << std::endl;
-        return std::nullopt; // Return early if no icon handle was obtained
+        std::cerr << "[IconUtils] ExtractAndSaveIconPng: Failed to obtain HICON." << std::endl;
+        return std::nullopt;
     }
-    std::cout << "[IconUtils] Successfully obtained icon handle (HICON)." << std::endl;
+    std::cout << "[IconUtils] ExtractAndSaveIconPng: Successfully obtained HICON." << std::endl;
 
-    // --- Step 4: Convert HICON to RGBA pixel data ---
-    ICONINFO iconInfo = {0};
-    BITMAP bmpColor = {0};
-    BITMAP bmpMask = {0};
-    std::vector<unsigned char> colorPixels;
-    std::vector<unsigned char> maskPixels;
-    bool success = false;
+    // --- Step 4: Convert HICON to RGBA using the new function --- 
+    std::cout << "[IconUtils] ExtractAndSaveIconPng: Converting HICON to RGBA..." << std::endl;
+    auto imageDataOpt = ConvertHIconToRGBA(hIcon);
 
-    if (GetIconInfo(hIcon, &iconInfo)) {
-        // Wrap GDI objects for automatic cleanup
-        struct GdiObjectDeleter { void operator()(HGDIOBJ obj) const { if (obj) DeleteObject(obj); } };
-        std::unique_ptr<void, GdiObjectDeleter> hbmColorGuard(iconInfo.hbmColor);
-        std::unique_ptr<void, GdiObjectDeleter> hbmMaskGuard(iconInfo.hbmMask);
+    // We MUST destroy the icon handle obtained in Step 3, regardless of conversion success
+    DestroyIcon(hIcon);
+    hIcon = NULL; 
+    std::cout << "[IconUtils] ExtractAndSaveIconPng: Original HICON destroyed." << std::endl;
 
-        if (iconInfo.hbmColor) {
-            GetObject(iconInfo.hbmColor, sizeof(bmpColor), &bmpColor);
-            iconWidth = bmpColor.bmWidth;
-            iconHeight = bmpColor.bmHeight;
-             std::cout << "[IconUtils] Icon dimensions: " << iconWidth << "x" << iconHeight << std::endl;
-
-            // Get color bitmap pixels (usually 32-bit BGRA)
-            colorPixels.resize(iconWidth * iconHeight * 4);
-            HDC hdcScreen = GetDC(NULL);
-            if (!hdcScreen) {
-                 std::cerr << "[IconUtils] GetDC(NULL) failed." << std::endl;
-                 DestroyIcon(hIcon);
-                 return std::nullopt;
-            }
-
-            // Create and populate a proper BITMAPINFO structure
-            BITMAPINFO bmiColor = {0};
-            bmiColor.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-            bmiColor.bmiHeader.biWidth = iconWidth;
-            bmiColor.bmiHeader.biHeight = -iconHeight; // Request top-down DIB
-            bmiColor.bmiHeader.biPlanes = 1;
-            bmiColor.bmiHeader.biBitCount = 32; // Request 32-bit pixels (BGRA)
-            bmiColor.bmiHeader.biCompression = BI_RGB;
-
-            if (GetDIBits(hdcScreen, (HBITMAP)iconInfo.hbmColor, 0, iconHeight, colorPixels.data(), &bmiColor, DIB_RGB_COLORS) > 0) {
-                std::cout << "[IconUtils] Successfully got color DIBits." << std::endl;
-                // Got color pixels. Now get mask if it exists (it should for icons)
-                if (iconInfo.hbmMask) {
-                     std::cout << "[IconUtils] Mask bitmap (hbmMask) exists. Getting mask info..." << std::endl;
-                    GetObject(iconInfo.hbmMask, sizeof(bmpMask), &bmpMask);
-                     std::cout << "[IconUtils] Mask dimensions: " << bmpMask.bmWidth << "x" << bmpMask.bmHeight << std::endl;
-                     if (bmpMask.bmWidth != iconWidth || abs(bmpMask.bmHeight) != iconHeight) {
-                        std::cerr << "[IconUtils] Warning: Mask dimensions (" << bmpMask.bmWidth << "x" << bmpMask.bmHeight
-                                  << ") do not match color dimensions (" << iconWidth << "x" << iconHeight << "). Adjusting expected mask size." << std::endl;
-                        // We proceed assuming the mask corresponds somehow, but this is unusual.
-                     }
-
-                    // Mask is usually 1-bit per pixel, height might be doubled if XOR mask present (not handled here simply)
-                    // We only need the basic AND mask part typically stored with hbmMask
-
-                    // Create a compatible DC and select the mask bitmap to query its bits
-                    HDC hdcMem = CreateCompatibleDC(hdcScreen);
-                    if (!hdcMem) {
-                        std::cerr << "[IconUtils] CreateCompatibleDC failed." << std::endl;
-                        ReleaseDC(NULL, hdcScreen);
-                        DestroyIcon(hIcon);
-                        return std::nullopt;
-                    }
-                    HBITMAP hbmOld = (HBITMAP)SelectObject(hdcMem, iconInfo.hbmMask);
-
-                    BITMAPINFO bmiMask = {0};
-                    bmiMask.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-                    bmiMask.bmiHeader.biWidth = iconWidth; // Use color width
-                    bmiMask.bmiHeader.biHeight = -iconHeight; // Top-down DIB, use color height
-                    bmiMask.bmiHeader.biPlanes = 1;
-                    bmiMask.bmiHeader.biBitCount = 1; // Request 1-bit mask data
-                    bmiMask.bmiHeader.biCompression = BI_RGB;
-
-                    // Query size needed for mask bits based on COLOR dimensions
-                    GetDIBits(hdcMem, (HBITMAP)iconInfo.hbmMask, 0, iconHeight, NULL, &bmiMask, DIB_RGB_COLORS);
-                    DWORD maskSize = bmiMask.bmiHeader.biSizeImage;
-                     std::cout << "[IconUtils] Calculated mask DIB size: " << maskSize << " bytes." << std::endl;
-
-                    if(maskSize > 0) {
-                        maskPixels.resize(maskSize);
-                        if (GetDIBits(hdcMem, (HBITMAP)iconInfo.hbmMask, 0, iconHeight, maskPixels.data(), &bmiMask, DIB_RGB_COLORS) > 0) {
-                            std::cout << "[IconUtils] Successfully got mask DIBits." << std::endl;
-                            // Now combine colorPixels (BGRA) and maskPixels (1-bit) into final RGBA
-                            pixels.resize(iconWidth * iconHeight * 4);
-                            int maskBytesPerRow = (iconWidth + 31) / 32 * 4; // Bytes per row in the mask DIB, padded to 4 bytes
-
-                            for (int y = 0; y < iconHeight; ++y) {
-                                for (int x = 0; x < iconWidth; ++x) {
-                                    int pixelIndex = (y * iconWidth + x);
-                                    int rgbaIndex = pixelIndex * 4;
-                                    int bgraIndex = rgbaIndex; // Assuming BGRA format from GetDIBits
-
-                                    // Get the mask bit (masks are often padded per line)
-                                    int maskByteIndex = (y * maskBytesPerRow) + (x / 8); // Calculate byte index in DIB buffer
-                                    int maskBitIndex = 7 - (x % 8); // Bit index within the byte (MSB first)
-
-                                    // Ensure we don't read past the buffer if maskSize was smaller than expected
-                                    bool isTransparent = false;
-                                    if (maskByteIndex < maskPixels.size()) {
-                                         isTransparent = ((maskPixels[maskByteIndex] >> maskBitIndex) & 1);
-                                    } else {
-                                         // This shouldn't happen if maskSize was calculated correctly
-                                         // std::cerr << "[IconUtils] Warning: Read past mask buffer at y=" << y << ", x=" << x << std::endl;
-                                    }
-
-
-                                    // Copy BGR, set Alpha based on mask
-                                    pixels[rgbaIndex + 0] = colorPixels[bgraIndex + 2]; // Blue -> Red
-                                    pixels[rgbaIndex + 1] = colorPixels[bgraIndex + 1]; // Green -> Green
-                                    pixels[rgbaIndex + 2] = colorPixels[bgraIndex + 0]; // Red -> Blue
-                                    pixels[rgbaIndex + 3] = isTransparent ? 0 : 255;  // Alpha (0 = transparent, 255 = opaque)
-                                }
-                            }
-                            success = true;
-                            std::cout << "[IconUtils] Successfully converted HICON to RGBA pixels (" << iconWidth << "x" << iconHeight << ")." << std::endl;
-                        } else {
-                             std::cerr << "[IconUtils] GetDIBits failed for mask bitmap. Error code: " << GetLastError() << std::endl;
-                             success = false; // Ensure success is false if mask extraction failed
-                        }
-                    } else {
-                         std::cerr << "[IconUtils] Calculated mask size is zero or GetDIBits query failed." << std::endl;
-                         success = false; // Ensure success is false
-                    }
-
-                    SelectObject(hdcMem, hbmOld); // Deselect bitmap
-                    DeleteDC(hdcMem);
-                     std::cout << "[IconUtils] Memory DC for mask deleted." << std::endl;
-                } else {
-                     std::cerr << "[IconUtils] IconInfo missing mask bitmap (hbmMask), cannot determine transparency." << std::endl;
-                      // Fallback: Assume opaque if no mask? Or treat as error? Let's treat as error for now.
-                      success = false;
-                     // Alternatively, create fully opaque image:
-                     /*
-                     pixels.resize(iconWidth * iconHeight * 4);
-                     for (int y = 0; y < iconHeight; ++y) {
-                         for (int x = 0; x < iconWidth; ++x) {
-                             int rgbaIndex = (y * iconWidth + x) * 4;
-                             pixels[rgbaIndex + 0] = colorPixels[rgbaIndex + 2]; // B -> R
-                             pixels[rgbaIndex + 1] = colorPixels[rgbaIndex + 1]; // G -> G
-                             pixels[rgbaIndex + 2] = colorPixels[rgbaIndex + 0]; // R -> B
-                             pixels[rgbaIndex + 3] = 255;                        // Alpha = Opaque
-                         }
-                     }
-                     success = true;
-                     std::cout << "[IconUtils] Warning: No mask found, created opaque RGBA image." << std::endl;
-                     */
-
-                }
-            } else { std::cerr << "[IconUtils] GetDIBits failed for color bitmap. Error code: " << GetLastError() << std::endl; }
-            ReleaseDC(NULL, hdcScreen);
-             std::cout << "[IconUtils] Screen DC released." << std::endl;
-        } else { std::cerr << "[IconUtils] IconInfo missing color bitmap (hbmColor)." << std::endl; }
-
-        // GDI objects hbmColor and hbmMask are cleaned up by unique_ptr guards
-        // We still need to destroy the original HICON handle
-    } else {
-        std::cerr << "[IconUtils] GetIconInfo failed for the icon handle. Error code: " << GetLastError() << std::endl;
-    }
-
-    // --- Step 5: Save RGBA pixels to PNG using wide char file access ---
+    // --- Step 5: Save RGBA pixels to PNG --- 
     std::optional<std::string> resultPath = std::nullopt;
 #ifdef _WIN32
-    if (success && !pixels.empty() && iconWidth > 0 && iconHeight > 0) {
-        std::cout << "[IconUtils] Preparing to save PNG (Windows)..." << std::endl;
-        // Convert UTF-8 path to wide string for Windows file API
+    if (imageDataOpt) {
+        const auto& imgData = *imageDataOpt;
+        std::cout << "[IconUtils] ExtractAndSaveIconPng: Preparing to save PNG..." << std::endl;
         std::wstring wOutputPath = StringUtils::Utf8ToWide(outputPathUtf8);
         if (wOutputPath.empty() && !outputPathUtf8.empty()) {
             std::cerr << "[IconUtils] Failed to convert output path to wstring: " << outputPathUtf8 << std::endl;
         } else {
             FILE* fp = nullptr;
-            errno_t err = _wfopen_s(&fp, wOutputPath.c_str(), L"wb"); // Use secure version
-
+            errno_t err = _wfopen_s(&fp, wOutputPath.c_str(), L"wb");
             if (err == 0 && fp != nullptr) {
-                 std::cout << "[IconUtils] Successfully opened file for writing (wide): " << outputPathUtf8 << std::endl;
-                // Use stbi_write_png_to_func with the FILE* as context
-                int write_result = stbi_write_png_to_func(stbi_write_callback, fp, iconWidth, iconHeight, 4, pixels.data(), iconWidth * 4);
-
-                int close_result = fclose(fp); // Close the file regardless of write result
+                 std::cout << "[IconUtils] ExtractAndSaveIconPng: File opened for writing." << std::endl;
+                 int write_result = stbi_write_png_to_func(stbi_write_callback, fp, imgData.width, imgData.height, 4, imgData.pixels.data(), imgData.width * 4);
+                 int close_result = fclose(fp);
                  if (close_result != 0) {
                     std::cerr << "[IconUtils] Warning: fclose failed after writing PNG. Error: " << strerror(errno) << std::endl;
                  }
-
-                if (write_result) {
-                    std::cout << "[IconUtils] Successfully saved icon using stbi_write_png_to_func to: " << outputPathUtf8 << std::endl;
-                    resultPath = outputPathUtf8; // Return the original UTF-8 path
-                } else {
-                    std::cerr << "[IconUtils] Failed to write PNG data using stbi_write_png_to_func to: " << outputPathUtf8 << std::endl;
-                    // Optionally delete the potentially incomplete file?
+                 if (write_result) {
+                    std::cout << "[IconUtils] ExtractAndSaveIconPng: Successfully saved PNG to: " << outputPathUtf8 << std::endl;
+                    resultPath = outputPathUtf8;
+                 } else {
+                     std::cerr << "[IconUtils] ExtractAndSaveIconPng: Failed to write PNG data." << std::endl;
                      int remove_result = _wremove(wOutputPath.c_str());
                      if (remove_result != 0) {
                          std::cerr << "[IconUtils] Failed to remove potentially incomplete PNG file: " << outputPathUtf8 << ", Error: " << strerror(errno) << std::endl;
                      } else {
                           std::cout << "[IconUtils] Removed potentially incomplete PNG file: " << outputPathUtf8 << std::endl;
                      }
-                }
+                 }
             } else {
                 char errBuffer[256];
                 strerror_s(errBuffer, sizeof(errBuffer), err);
@@ -401,39 +393,32 @@ std::optional<std::string> IconUtils::ExtractAndSaveIconPng(
                           << outputPathUtf8 << ", Error code: " << err << " (" << errBuffer << ")" << std::endl;
             }
         }
-    } else if (!success) {
-         std::cerr << "[IconUtils] Skipping PNG save because HICON to RGBA conversion failed or produced no data." << std::endl;
+    } else {
+         std::cerr << "[IconUtils] ExtractAndSaveIconPng: Skipping PNG save due to HICON conversion failure." << std::endl;
     }
 #else
-    // Non-Windows implementation (assuming stbi_write_png handles UTF-8 paths correctly)
-    if (success && !pixels.empty() && iconWidth > 0 && iconHeight > 0) {
-        std::cout << "[IconUtils] Preparing to save PNG (Non-Windows)..." << std::endl;
-        if (stbi_write_png(outputPathUtf8.c_str(), iconWidth, iconHeight, 4, pixels.data(), iconWidth * 4)) {
-            std::cout << "[IconUtils] Successfully saved icon to: " << outputPathUtf8 << std::endl;
-            resultPath = outputPathUtf8;
-        } else {
-            std::cerr << "[IconUtils] Failed to write PNG file using stb_image_write to: " << outputPathUtf8 << std::endl;
-        }
-    } else if (!success) {
-        std::cerr << "[IconUtils] Skipping PNG save because HICON to RGBA conversion failed or produced no data." << std::endl;
+    // Non-Windows PNG saving (can likely be removed if IconUtils is Windows-only)
+    if (imageDataOpt) {
+        const auto& imgData = *imageDataOpt;
+         std::cout << "[IconUtils] ExtractAndSaveIconPng: Preparing to save PNG (Non-Windows)..." << std::endl;
+         if (stbi_write_png(outputPathUtf8.c_str(), imgData.width, imgData.height, 4, imgData.pixels.data(), imgData.width * 4)) {
+             /* ... success log ... */
+             resultPath = outputPathUtf8;
+         } else {
+             /* ... error log ... */
+         }
     }
 #endif
 
-    // --- Step 6: Cleanup HICON ---
-    if (hIcon) {
-        DestroyIcon(hIcon);
-         std::cout << "[IconUtils] Original HICON destroyed." << std::endl;
-        hIcon = NULL;
-    }
+    // --- Step 6: Cleanup (HICON already destroyed) ---
 
-    // --- Step 7: Return Result ---
+    // --- Step 7: Return Result --- 
     if (resultPath.has_value()) {
-        std::cout << "[IconUtils] Returning saved path: " << resultPath.value() << std::endl;
+        std::cout << "[IconUtils] ExtractAndSaveIconPng: Returning saved path: " << resultPath.value() << std::endl;
     } else {
-         std::cout << "[IconUtils] Icon extraction/saving failed. Returning nullopt." << std::endl;
+         std::cout << "[IconUtils] ExtractAndSaveIconPng: Icon extraction/saving failed. Returning nullopt." << std::endl;
     }
     return resultPath;
 }
-
 
 #endif // _WIN32 

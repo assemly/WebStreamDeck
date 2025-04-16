@@ -2,9 +2,19 @@
 
 #include <string>
 #include <optional>
+#include <vector>
 
 // Only define the class and methods on Windows for now
 #ifdef _WIN32
+
+#include <windows.h> // Include for HICON type
+
+// Structure to hold raw image data
+struct ImageData {
+    int width = 0;
+    int height = 0;
+    std::vector<unsigned char> pixels; // RGBA format
+};
 
 class IconUtils {
 public:
@@ -17,11 +27,15 @@ public:
         const std::string& desiredBaseName // Base name for the output PNG (e.g., "btn_myapp")
     );
 
+    // Converts an HICON handle to raw RGBA pixel data.
+    // Returns ImageData on success, or std::nullopt on failure.
+    // IMPORTANT: The caller does NOT own the input hIcon and should NOT destroy it.
+    // This function only reads from the hIcon.
+    static std::optional<ImageData> ConvertHIconToRGBA(HICON hIcon);
+
 private:
-    // Private helper functions would go here, e.g.:
+    // Private helper functions are now less needed as ConvertHIconToRGBA is public static
     // static HICON GetIconHandle(const std::wstring& filePath);
-    // static bool ConvertHICONToRGBA(HICON hIcon, std::vector<unsigned char>& pixels, int& width, int& height);
-    // static bool SavePixelsToPng(const unsigned char* pixels, int width, int height, const std::string& outputPath);
 };
 
 #endif // _WIN32 

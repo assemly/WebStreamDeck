@@ -46,14 +46,15 @@ target_include_directories(qrcodegen_lib PUBLIC third_party/QR-Code-generator-1.
 # target_include_directories(${PROJECT_NAME} PRIVATE third_party/stb) # REMOVED this line
 
 # Add the executable
-add_executable(${PROJECT_NAME}
+# Store source files in a variable
+set(APP_SOURCES
     src/Utils/InputUtils.cpp
     src/Utils/GifLoader.cpp
     src/Utils/NetworkUtils.cpp
     src/Utils/TextureLoader.cpp
     src/Utils/StringUtils.cpp
     src/Utils/IconUtils.cpp
-    
+
     src/Services/ActionExecutionService.cpp
     src/Services/HttpServer.cpp
     src/Services/WebSocketServer.cpp
@@ -62,7 +63,7 @@ add_executable(${PROJECT_NAME}
     src/Managers/ActionRequestManager.cpp
     src/Managers/NetworkManager.cpp
     src/Managers/TranslationManager.cpp
-    
+
     src/UIWindows/Components/PresetManagerComponent.cpp
     src/UIWindows/Components/ButtonListComponent.cpp
     src/UIWindows/Components/ButtonEditComponent.cpp
@@ -80,6 +81,13 @@ add_executable(${PROJECT_NAME}
 
     src/main.cpp
 )
+
+# Add the resource file only on Windows
+if(WIN32)
+    list(APPEND APP_SOURCES WebStreamDeck.rc)
+endif()
+
+add_executable(${PROJECT_NAME} ${APP_SOURCES})
 
 # ADDED: Define NOMINMAX globally to prevent windows.h min/max macro conflicts
 target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX)
@@ -127,6 +135,6 @@ endif()
 # Optional: Show console window on Windows alongside GUI (uses standard 'main' entry point)
 if(WIN32)
     set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
-    # target_link_options(WebStreamDeckMinimal PRIVATE "/SUBSYSTEM:WINDOWS") # Use WinMain
+    # target_link_options(${PROJECT_NAME} PRIVATE "/SUBSYSTEM:WINDOWS") # Use WinMain
     target_link_options(${PROJECT_NAME} PRIVATE "/SUBSYSTEM:CONSOLE") # Use main
 endif() 
