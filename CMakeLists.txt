@@ -64,6 +64,9 @@ add_executable(${PROJECT_NAME}
     src/UIWindows/Components/PresetManagerComponent.cpp
     src/UIWindows/Components/ButtonListComponent.cpp
     src/UIWindows/Components/ButtonEditComponent.cpp
+    src/UIWindows/Components/GridPaginationComponent.cpp
+    src/UIWindows/Components/ButtonSelectorPopupComponent.cpp
+    src/UIWindows/Components/GridCellComponent.cpp
 
     src/UIWindows/UIButtonGridWindow.cpp
     src/UIWindows/UIConfigurationWindow.cpp

@@ -10,9 +10,14 @@
 #include "../Managers/ActionRequestManager.hpp"
 #include "../Utils/GifLoader.hpp" // For AnimatedGif struct
 #include "../Utils/TextureLoader.hpp"
+#include "Components/GridPaginationComponent.hpp"
+#include "Components/ButtonSelectorPopupComponent.hpp"
+#include "Components/GridCellComponent.hpp"
 
 // Forward declare UIManager to avoid circular dependency if needed later
 class UIManager;
+// <<< ADDED: Forward declare non-namespaced TranslationManager >>>
+class TranslationManager; // Add this if TranslationManager.hpp isn't included
 
 class UIButtonGridWindow {
 public:
@@ -27,6 +32,7 @@ public:
 private:
     ConfigManager& m_configManager;
     ActionRequestManager& m_actionRequestManager;
+    // <<< MODIFIED: Use non-namespaced type for member variable >>>
     TranslationManager& m_translator;
     UIManager& m_uiManager;
 
@@ -37,37 +43,31 @@ private:
     // <<< ADDED: Member variable to store the current page index >>>
     int m_currentPageIndex = 0; // Default to page 0
 
-    // <<< MODIFIED: Variables and functions for selecting an existing button >>>
-    bool m_openSelectButtonPopup = false;
-    int m_selectTargetPage = 0;
-    int m_selectTargetRow = 0;
-    int m_selectTargetCol = 0;
-    void DrawSelectButtonPopup();
+    // <<< ADDED: Component Instances >>>
+    GridPaginationComponent m_paginationComponent;
+    ButtonSelectorPopupComponent m_buttonSelectorPopup;
+    GridCellComponent m_gridCellComponent;
 
-    // <<< ADDED: Filter text for the select button popup >>>
-    char m_selectButtonFilter[128] = "";
+    void releaseAnimatedGifTextures(); // Helper for GIF textures
+
+    // <<< ADDED: Helper function to draw a single button
+    // void DrawSingleButton(const ButtonConfig& button, double currentTime, float buttonSize);
+    
+    // <<< ADDED: Helper for File Dialogs specific to this window (if needed) >>>
+    // void HandleAddButtonFileDialog();
 
     // <<< ADDED: Declaration for extracted pagination drawing logic >>>
-    void DrawPaginationControls();
+    // void DrawPaginationControls();
 
     // <<< ADDED: Declaration for extracted grid cell drawing logic >>>
     void DrawGridCells(const LayoutConfig& layout, const std::vector<std::vector<std::string>>& currentPageLayout, double currentTime);
 
     // <<< ADDED: Declarations for extracted cell content drawing logic >>>
-    void DrawButtonInCell(const std::string& buttonId, int r, int c, double currentTime, const ImVec2& buttonSizeVec, bool& layoutChanged);
-    void DrawEmptyCell(int r, int c, const ImVec2& buttonSizeVec, bool& layoutChanged);
+    // void DrawButtonInCell(const std::string& buttonId, int r, int c, double currentTime, const ImVec2& buttonSizeVec, bool& layoutChanged);
+    // void DrawEmptyCell(int r, int c, const ImVec2& buttonSizeVec, bool& layoutChanged);
 
     // <<< ADDED: Declarations for extracted button interaction logic >>>
-    void HandleButtonDragSource(const ButtonConfig& button, const ImVec2& buttonSizeVec);
-    void HandleButtonDropTarget(const std::string& currentButtonId, bool& layoutChanged);
-    void HandleButtonContextMenu(const std::string& buttonId, int r, int c);
-
-
-    void releaseAnimatedGifTextures(); // Helper for GIF textures
-
-    // <<< ADDED: Helper function to draw a single button
-    void DrawSingleButton(const ButtonConfig& button, double currentTime, float buttonSize);
-    
-    // <<< ADDED: Helper for File Dialogs specific to this window (if needed) >>>
-    // void HandleAddButtonFileDialog();
+    // void HandleButtonDragSource(const ButtonConfig& button, const ImVec2& buttonSizeVec);
+    // void HandleButtonDropTarget(const std::string& currentButtonId, bool& layoutChanged);
+    // void HandleButtonContextMenu(const std::string& buttonId, int r, int c);
 };
