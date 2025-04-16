@@ -93,6 +93,10 @@ void UIQrCodeWindow::Draw(bool isServerRunning, int serverPort, const std::strin
         // Regenerate texture only if the address has changed
         if (http_address != m_lastGeneratedQrText) {
             generateQrTexture(http_address);
+            // If texture generation was successful, focus the window
+            if (m_qrTextureId != 0) {
+                ImGui::SetWindowFocus(m_translator.get("qr_code_window_title").c_str());
+            }
         }
 
         ImGui::TextUnformatted(m_translator.get("scan_qr_code_prompt_1").c_str());

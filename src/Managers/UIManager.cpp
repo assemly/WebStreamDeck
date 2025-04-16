@@ -101,6 +101,7 @@ void UIManager::setServerStatus(bool isRunning, int port) {
 void UIManager::notifyLayoutChanged() {
     m_buttonGridWindow.onLayoutChanged();
     m_configWindow.onLayoutChanged(); // Notify config window too if needed
+    m_networkManager.broadcastWebSocketState();
 }
 
 // <<< ADDED: Implementation for processing dropped files >>>

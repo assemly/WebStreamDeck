@@ -327,7 +327,7 @@ Application::Application()
     SetupCallbacks(); // Setup callbacks after managers are ready
 
     LogToFile(L"Starting Services...");
-    if (!StartServices()) {
+    if (!StartServices()) { 
         LogToFile(L"Error: Failed to start services.");
         std::cerr << "[Application] Failed to start services." << std::endl;
         // Destructor will handle shutdown
@@ -898,6 +898,6 @@ void Application::Run() {
         glfwSwapBuffers(m_window);
     }
     std::cout << "Exited main loop." << std::endl;
-}
+} 
 
 #endif // _WIN32 <-- Ensure this matches the #ifdef around Tray Icon Methods Implementation 
