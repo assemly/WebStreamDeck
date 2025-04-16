@@ -195,32 +195,36 @@ std::optional<ImageData> IconUtils::ConvertHIconToRGBA(HICON hIcon) {
 
 // --- Modified Existing Function --- 
 
-std::optional<std::string> IconUtils::ExtractAndSaveIconPng(
+std::optional<std::wstring> IconUtils::ExtractAndSaveIconPng(
     const std::wstring& filePath,
-    const std::string& outputDir,
-    const std::string& desiredBaseName)
+    const std::wstring& outputDirW,
+    const std::wstring& desiredBaseNameW)
 {
-    std::cout << "[IconUtils] ExtractAndSaveIconPng: Attempting icon extraction for '" << desiredBaseName << "' from: "
+    std::cout << "[IconUtils] ExtractAndSaveIconPng: Attempting icon extraction for '" 
+              << StringUtils::WideToUtf8(desiredBaseNameW) << "' from: " 
               << StringUtils::WideToUtf8(filePath) << std::endl;
 
-    // 1. Check/Create Output Directory
+    // 1. Check/Create Output Directory (使用 wstring)
     try {
-        if (!fs::exists(outputDir)) {
-            if (!fs::create_directories(outputDir)) {
-                std::cerr << "[IconUtils] Error: Failed to create output directory: " << outputDir << std::endl;
+        if (!fs::exists(outputDirW)) { // <<< CHANGED: Use outputDirW
+            if (!fs::create_directories(outputDirW)) { // <<< CHANGED: Use outputDirW
+                std::wcerr << L"[IconUtils] Error: Failed to create output directory: " << outputDirW << std::endl;
                 return std::nullopt;
             }
-            std::cout << "[IconUtils] Created output directory: " << outputDir << std::endl;
+            std::wcout << L"[IconUtils] Created output directory: " << outputDirW << std::endl;
         }
     } catch (const fs::filesystem_error& e) {
-        std::cerr << "[IconUtils] Filesystem error checking/creating directory: " << e.what() << std::endl;
+        // 错误信息可能包含非 ASCII 字符，输出前转换为 UTF-8
+        std::cerr << "[IconUtils] Filesystem error checking/creating directory: " << e.what() 
+                  << " (Path: " << StringUtils::WideToUtf8(e.path1().wstring()) 
+                  << ", Path2: " << StringUtils::WideToUtf8(e.path2().wstring()) << ")" << std::endl;
         return std::nullopt;
     }
 
-    // 2. Construct Full Output Path
-    fs::path fullPath = fs::path(outputDir) / (desiredBaseName + ".png");
-    std::string outputPathUtf8 = fullPath.generic_string();
-    std::cout << "[IconUtils] ExtractAndSaveIconPng: Target output path: " << outputPathUtf8 << std::endl;
+    // 2. Construct Full Output Path (使用 wstring)
+    fs::path fullPath = fs::path(outputDirW) / (desiredBaseNameW + L".png"); // <<< CHANGED: Use outputDirW and desiredBaseNameW
+    std::wstring outputPathW = fullPath.wstring(); // 或者 .native()，wstring() 通常够用
+    std::wcout << L"[IconUtils] ExtractAndSaveIconPng: Target output path: " << outputPathW << std::endl;
 
     HICON hIcon = NULL;
 
@@ -356,56 +360,62 @@ std::optional<std::string> IconUtils::ExtractAndSaveIconPng(
     std::cout << "[IconUtils] ExtractAndSaveIconPng: Original HICON destroyed." << std::endl;
 
     // --- Step 5: Save RGBA pixels to PNG --- 
-    std::optional<std::string> resultPath = std::nullopt;
+    std::optional<std::wstring> resultPath = std::nullopt; // <<< CHANGED: Return type is optional<wstring>
 #ifdef _WIN32
     if (imageDataOpt) {
         const auto& imgData = *imageDataOpt;
-        std::cout << "[IconUtils] ExtractAndSaveIconPng: Preparing to save PNG..." << std::endl;
-        std::wstring wOutputPath = StringUtils::Utf8ToWide(outputPathUtf8);
-        if (wOutputPath.empty() && !outputPathUtf8.empty()) {
-            std::cerr << "[IconUtils] Failed to convert output path to wstring: " << outputPathUtf8 << std::endl;
-        } else {
-            FILE* fp = nullptr;
-            errno_t err = _wfopen_s(&fp, wOutputPath.c_str(), L"wb");
-            if (err == 0 && fp != nullptr) {
-                 std::cout << "[IconUtils] ExtractAndSaveIconPng: File opened for writing." << std::endl;
-                 int write_result = stbi_write_png_to_func(stbi_write_callback, fp, imgData.width, imgData.height, 4, imgData.pixels.data(), imgData.width * 4);
-                 int close_result = fclose(fp);
-                 if (close_result != 0) {
-                    std::cerr << "[IconUtils] Warning: fclose failed after writing PNG. Error: " << strerror(errno) << std::endl;
-                 }
-                 if (write_result) {
-                    std::cout << "[IconUtils] ExtractAndSaveIconPng: Successfully saved PNG to: " << outputPathUtf8 << std::endl;
-                    resultPath = outputPathUtf8;
+        std::wcout << L"[IconUtils] ExtractAndSaveIconPng: Preparing to save PNG to: " << outputPathW << std::endl;
+        FILE* fp = nullptr;
+        errno_t err = _wfopen_s(&fp, outputPathW.c_str(), L"wb"); // <<< CHANGED: Use outputPathW directly
+        if (err == 0 && fp != nullptr) {
+             std::wcout << L"[IconUtils] ExtractAndSaveIconPng: File opened for writing." << std::endl;
+             int write_result = stbi_write_png_to_func(stbi_write_callback, fp, imgData.width, imgData.height, 4, imgData.pixels.data(), imgData.width * 4);
+             int close_result = fclose(fp);
+             if (close_result != 0) {
+                std::cerr << "[IconUtils] Warning: fclose failed after writing PNG. Error: " << strerror(errno) << std::endl;
+             }
+             if (write_result) {
+                std::wcout << L"[IconUtils] ExtractAndSaveIconPng: Successfully saved PNG to: " << outputPathW << std::endl;
+                resultPath = outputPathW; // <<< CHANGED: Assign wstring path
+             } else {
+                 std::wcerr << L"[IconUtils] ExtractAndSaveIconPng: Failed to write PNG data." << std::endl;
+                 int remove_result = _wremove(outputPathW.c_str()); // <<< CHANGED: Use outputPathW
+                 if (remove_result != 0) {
+                     wchar_t errBuf[256];
+                     _wcserror_s(errBuf, sizeof(errBuf)/sizeof(wchar_t), errno);
+                     std::wcerr << L"[IconUtils] Failed to remove potentially incomplete PNG file: " << outputPathW << L", Error: " << errBuf << std::endl;
                  } else {
-                     std::cerr << "[IconUtils] ExtractAndSaveIconPng: Failed to write PNG data." << std::endl;
-                     int remove_result = _wremove(wOutputPath.c_str());
-                     if (remove_result != 0) {
-                         std::cerr << "[IconUtils] Failed to remove potentially incomplete PNG file: " << outputPathUtf8 << ", Error: " << strerror(errno) << std::endl;
-                     } else {
-                          std::cout << "[IconUtils] Removed potentially incomplete PNG file: " << outputPathUtf8 << std::endl;
-                     }
+                      std::wcout << L"[IconUtils] Removed potentially incomplete PNG file: " << outputPathW << std::endl;
                  }
-            } else {
-                char errBuffer[256];
-                strerror_s(errBuffer, sizeof(errBuffer), err);
-                std::cerr << "[IconUtils] Failed to open file for writing (wide) using _wfopen_s. Path: "
-                          << outputPathUtf8 << ", Error code: " << err << " (" << errBuffer << ")" << std::endl;
-            }
+             }
+        } else {
+            wchar_t errBuffer[256];
+            _wcserror_s(errBuffer, sizeof(errBuffer)/sizeof(wchar_t), err);
+            std::wcerr << L"[IconUtils] Failed to open file for writing (wide) using _wfopen_s. Path: "
+                      << outputPathW << L", Error code: " << err << L" (" << errBuffer << L")" << std::endl;
         }
     } else {
-         std::cerr << "[IconUtils] ExtractAndSaveIconPng: Skipping PNG save due to HICON conversion failure." << std::endl;
+         std::wcerr << L"[IconUtils] ExtractAndSaveIconPng: Skipping PNG save due to HICON conversion failure." << std::endl;
     }
 #else
-    // Non-Windows PNG saving (can likely be removed if IconUtils is Windows-only)
+    // Non-Windows PNG saving (保持 string 处理，但输入路径可能需要转换)
     if (imageDataOpt) {
         const auto& imgData = *imageDataOpt;
-         std::cout << "[IconUtils] ExtractAndSaveIconPng: Preparing to save PNG (Non-Windows)..." << std::endl;
-         if (stbi_write_png(outputPathUtf8.c_str(), imgData.width, imgData.height, 4, imgData.pixels.data(), imgData.width * 4)) {
-             /* ... success log ... */
-             resultPath = outputPathUtf8;
+         std::string outputPathUtf8 = StringUtils::WideToUtf8(outputPathW); // <<< CHANGED: Convert wstring path for non-windows
+         if (outputPathUtf8.empty() && !outputPathW.empty()) {
+            std::wcerr << L"[IconUtils] Failed to convert output path to UTF-8 for non-Windows save: " << outputPathW << std::endl;
          } else {
-             /* ... error log ... */
+            std::cout << "[IconUtils] ExtractAndSaveIconPng: Preparing to save PNG (Non-Windows)... to: " << outputPathUtf8 << std::endl;
+            if (stbi_write_png(outputPathUtf8.c_str(), imgData.width, imgData.height, 4, imgData.pixels.data(), imgData.width * 4)) {
+                 std::cout << "[IconUtils] Successfully saved PNG to: " << outputPathUtf8 << std::endl;
+                 resultPath = outputPathW; // <<< CHANGED: Return original wstring path
+            } else {
+                 std::cerr << "[IconUtils] Failed to write PNG data (Non-Windows)." << std::endl;
+                 // Consider removing the file using outputPathUtf8
+                 if (std::remove(outputPathUtf8.c_str()) != 0) {
+                    perror("[IconUtils] Error deleting potentially incomplete PNG file (Non-Windows)");
+                 }
+            }
          }
     }
 #endif
@@ -414,9 +424,9 @@ std::optional<std::string> IconUtils::ExtractAndSaveIconPng(
 
     // --- Step 7: Return Result --- 
     if (resultPath.has_value()) {
-        std::cout << "[IconUtils] ExtractAndSaveIconPng: Returning saved path: " << resultPath.value() << std::endl;
+        std::wcout << L"[IconUtils] ExtractAndSaveIconPng: Returning saved path: " << resultPath.value() << std::endl;
     } else {
-         std::cout << "[IconUtils] ExtractAndSaveIconPng: Icon extraction/saving failed. Returning nullopt." << std::endl;
+         std::wcerr << L"[IconUtils] ExtractAndSaveIconPng: Icon extraction/saving failed. Returning nullopt." << std::endl;
     }
     return resultPath;
 }

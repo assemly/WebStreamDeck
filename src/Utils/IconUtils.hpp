@@ -21,10 +21,10 @@ public:
     // Attempts to extract an icon from an executable (.exe) or shortcut (.lnk),
     // save it as a PNG to the specified directory using the desired base name.
     // Returns the full path to the saved PNG file on success, or std::nullopt on failure.
-    static std::optional<std::string> ExtractAndSaveIconPng(
+    static std::optional<std::wstring> ExtractAndSaveIconPng(
         const std::wstring& filePath,      // Input file path (.exe or .lnk)
-        const std::string& outputDir,     // Directory to save the PNG (e.g., "assets/icons")
-        const std::string& desiredBaseName // Base name for the output PNG (e.g., "btn_myapp")
+        const std::wstring& outputDirW,     // Directory to save the PNG (e.g., "assets/icons")
+        const std::wstring& desiredBaseNameW // Base name for the output PNG (e.g., "btn_myapp")
     );
 
     // Converts an HICON handle to raw RGBA pixel data.

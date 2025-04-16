@@ -21,6 +21,9 @@ std::string WideToUtf8(const std::wstring& wide_str);
 // Convert std::wstring to lowercase
 std::wstring ToLowerW(std::wstring str);
 
+// Convert std::wstring to a hex representation string (for debugging)
+std::wstring WStringToHex(const std::wstring& input);
+
 #else
 // On other platforms, std::wstring might exist but the conversion isn't needed
 // or needs a different approach. We can provide a stub declaration if needed,

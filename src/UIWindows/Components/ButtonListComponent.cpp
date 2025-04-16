@@ -7,13 +7,11 @@
 #include <cctype>     // For std::tolower, std::isalnum
 #include <string>
 #include <vector>
-#include <iomanip> // For std::hex, std::setfill, std::setw
 #include <sstream> // For std::wstringstream, std::stringstream
 #include <chrono>  // For random ID generation
 #include <random>  // For random ID generation (better than rand)
-#include <cstdlib> // For rand, srand (if std::random not used)
-#include <ctime>   // For time (seeding)
 #include "../../Utils/IconUtils.hpp" // <<< ADDED: Include IconUtils
+#include "../../Utils/StringUtils.hpp" // <<< ADDED: Include StringUtils for conversions
 #include <fstream> // For std::ifstream, std::wifstream
 #include <string_view> // For efficient string comparison
 
@@ -27,34 +25,6 @@ namespace fs = std::filesystem;
 
 // <<< Make sure the extern declaration is accessible if needed, or rely on header >>>
 // extern std::vector<std::string> g_DroppedFiles;
-
-// <<< ADDED: Helper function for Windows: Convert wstring to UTF-8 string >>>
-#ifdef _WIN32
-std::string WideToUtf8(const std::wstring& wstr) {
-    if (wstr.empty()) return std::string();
-    int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
-    if (size_needed <= 0) { // Handle error
-         std::cerr << "[WideToUtf8] WideCharToMultiByte failed to calculate size. Error code: " << GetLastError() << std::endl;
-         return ""; 
-    }
-    std::string strTo(size_needed, 0);
-    int bytes_converted = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
-     if (bytes_converted <= 0) { // Handle error
-         std::cerr << "[WideToUtf8] WideCharToMultiByte failed to convert. Error code: " << GetLastError() << std::endl;
-         return ""; 
-    }
-    return strTo;
-}
-
-std::wstring WStringToHex(const std::wstring& input) {
-    std::wstringstream ss;
-    ss << std::hex << std::setfill(L'0');
-    for (wchar_t wc : input) {
-        ss << L" 0x" << std::setw(4) << static_cast<unsigned int>(wc);
-    }
-    return ss.str();
-}
-#endif
 
 // Check if a character is a "basic" ASCII character suitable for readable IDs
 bool isBasicAscii(wchar_t c) {
@@ -235,28 +205,28 @@ bool StartsWithCaseInsensitive(const std::string_view& text, const std::string_v
 // <<< Modify the private ProcessDroppedFile helper >>>
 #ifdef _WIN32
 void ButtonListComponent::ProcessDroppedFile(const std::wstring& filePathW) {
-    std::cout << "[ButtonList DEBUG] Processing wstring path: " << WideToUtf8(filePathW) << std::endl;
-    std::wcout << L"[ButtonList DEBUG] Processing wstring path (raw hex):" << WStringToHex(filePathW) << std::endl;
+    std::cout << "[ButtonList DEBUG] Processing wstring path: " << StringUtils::WideToUtf8(filePathW) << std::endl;
+    std::wcout << L"[ButtonList DEBUG] Processing wstring path (raw hex):" << StringUtils::WStringToHex(filePathW) << std::endl;
 
     // <<< DEBUG: Check existence using Windows API directly >>>
     if (_waccess(filePathW.c_str(), 0) == 0) {
-        std::cout << "[ButtonList DEBUG] _waccess succeeded for: " << WideToUtf8(filePathW) << std::endl;
+        std::cout << "[ButtonList DEBUG] _waccess succeeded for: " << StringUtils::WideToUtf8(filePathW) << std::endl;
     } else {
-        std::cerr << "[ButtonList DEBUG] _waccess FAILED for: " << WideToUtf8(filePathW) << " (errno: " << errno << ")" << std::endl;
+        std::cerr << "[ButtonList DEBUG] _waccess FAILED for: " << StringUtils::WideToUtf8(filePathW) << " (errno: " << errno << ")" << std::endl;
     }
 
     try {
         fs::path p(filePathW);
         if (!fs::exists(p)) {
-            std::cerr << "[ButtonList] Dropped file does not exist (reported by fs::exists): " << WideToUtf8(filePathW) << std::endl;
+            std::cerr << "[ButtonList] Dropped file does not exist (reported by fs::exists): " << StringUtils::WideToUtf8(filePathW) << std::endl;
             return;
         }
 
         std::wstring wExtension = p.has_extension() ? p.extension().wstring() : L"";
         std::wstring wStem = p.stem().wstring();
-        std::string extension = WideToUtf8(wExtension);
+        std::string extension = StringUtils::WideToUtf8(wExtension);
         std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
-        std::string stem = WideToUtf8(wStem);
+        std::string stem = StringUtils::WideToUtf8(wStem);
 
         PrefilledButtonData data;
 
@@ -264,22 +234,22 @@ void ButtonListComponent::ProcessDroppedFile(const std::wstring& filePathW) {
         bool containsOnlyBasicAscii = !std::any_of(wStem.begin(), wStem.end(), [](wchar_t c){ return !isBasicAscii(c); });
 
         if (containsOnlyBasicAscii && !wStem.empty()) {
-            std::string stem = WideToUtf8(wStem); // Convert now
-            data.suggested_id = "btn_" + stem;
+            std::string stemFromWStem = StringUtils::WideToUtf8(wStem); // Convert now
+            data.suggested_id = "btn_" + stemFromWStem;
             // Replace any remaining non-alphanumeric chars (should only be '-' potentially) with '_'
              std::replace_if(data.suggested_id.begin(), data.suggested_id.end(),
                  [](char c){ return !std::isalnum(c) && c != '_'; }, '_');
-            data.suggested_name = stem; // Use original stem for name
+            data.suggested_name = stemFromWStem; // Use converted stem for name too
             std::cout << "[ButtonList] Generated ID from basic ASCII stem: " << data.suggested_id << std::endl;
         } else {
             data.suggested_id = GenerateRandomButtonId();
-            data.suggested_name = WideToUtf8(wStem); // Still use original stem for name
+            data.suggested_name = StringUtils::WideToUtf8(wStem); // Still use original stem for name
             std::cout << "[ButtonList] Generated random ID due to non-basic/empty stem: " << data.suggested_id << std::endl;
         }
 
         // --- Action Type Detection & Param Extraction ---
-        std::string actionParamUtf8 = WideToUtf8(filePathW);
-        std::string stemForIcon = WideToUtf8(wStem);
+        std::string actionParamUtf8 = StringUtils::WideToUtf8(filePathW);
+        std::string stemForIcon = StringUtils::WideToUtf8(wStem);
 
         if (extension == ".exe" || extension == ".bat" || extension == ".sh" || extension == ".app") {
             data.action_type = "launch_app";
@@ -287,13 +257,16 @@ void ButtonListComponent::ProcessDroppedFile(const std::wstring& filePathW) {
 
             // <<< ADDED: Attempt to extract icon for .exe >>>
             if (extension == ".exe") {
-                std::string outputDir = "assets/icons";
-                auto extractedIconPathOpt = IconUtils::ExtractAndSaveIconPng(filePathW, outputDir, stemForIcon);
+                // 修改：使用 wstring 作为输出目录，并处理返回的 optional<wstring>
+                std::wstring outputDirW = L"assets/icons"; // <<< CHANGED: Use wstring literal
+                // desiredBaseName 需要是 wstring，wStem 已经是 wstring
+                auto extractedIconPathOpt = IconUtils::ExtractAndSaveIconPng(filePathW, outputDirW, wStem);
                 if (extractedIconPathOpt) {
-                    data.suggested_icon_path = *extractedIconPathOpt;
-                     std::cout << "[ButtonList] Successfully extracted and set icon path: " << data.suggested_icon_path << std::endl;
+                    // 返回值是 wstring，需要转为 string (UTF-8) 存储
+                    data.suggested_icon_path = StringUtils::WideToUtf8(extractedIconPathOpt.value()); // <<< CHANGED: Convert return value
+                     std::wcout << L"[ButtonList] Successfully extracted and set icon path: " << extractedIconPathOpt.value() << std::endl; // <<< CHANGED: Use wcout
                 } else {
-                    std::cerr << "[ButtonList] Failed to extract icon for " << actionParamUtf8 << std::endl;
+                    std::wcerr << L"[ButtonList] Failed to extract icon for " << filePathW << std::endl; // <<< CHANGED: Use wcerr
                     // Keep suggested_icon_path empty or default
                 }
             }
@@ -302,7 +275,7 @@ void ButtonListComponent::ProcessDroppedFile(const std::wstring& filePathW) {
         } else if (extension == ".url") {
             data.action_type = "open_url";
             data.action_param = ""; // Default to empty
-            std::cout << "[ButtonList] Processing .url file: " << WideToUtf8(filePathW) << std::endl;
+            std::cout << "[ButtonList] Processing .url file: " << StringUtils::WideToUtf8(filePathW) << std::endl;
 
             std::wifstream urlFile(filePathW); // Use wifstream for wide path
             if (urlFile.is_open()) {
@@ -315,7 +288,7 @@ void ButtonListComponent::ProcessDroppedFile(const std::wstring& filePathW) {
                         std::wstring extractedUrl = line.substr(4); // Get string after "URL="
                         extractedUrl = TrimW(extractedUrl); // Trim whitespace
                         if (!extractedUrl.empty()) {
-                            data.action_param = WideToUtf8(extractedUrl);
+                            data.action_param = StringUtils::WideToUtf8(extractedUrl);
                             std::cout << "[ButtonList] Extracted URL: " << data.action_param << std::endl;
                             urlFound = true;
                             break; // Found it, no need to read further
@@ -324,22 +297,25 @@ void ButtonListComponent::ProcessDroppedFile(const std::wstring& filePathW) {
                 }
                 urlFile.close();
                 if (!urlFound) {
-                    std::cerr << "[ButtonList] No valid 'URL=' line found in " << WideToUtf8(filePathW) << std::endl;
+                    std::cerr << "[ButtonList] No valid 'URL=' line found in " << StringUtils::WideToUtf8(filePathW) << std::endl;
                 }
             } else {
-                std::cerr << "[ButtonList] Failed to open .url file: " << WideToUtf8(filePathW) << std::endl;
+                std::cerr << "[ButtonList] Failed to open .url file: " << StringUtils::WideToUtf8(filePathW) << std::endl;
             }
         } else if (extension == ".lnk") {
             data.action_type = "launch_app";
             data.action_param = actionParamUtf8;
             // Call IconUtils to extract icon from .lnk file
-            std::string outputDir = "assets/icons";
-            auto extractedIconPathOpt = IconUtils::ExtractAndSaveIconPng(filePathW, outputDir, stemForIcon);
+            // 修改：使用 wstring 作为输出目录，并处理返回的 optional<wstring>
+            std::wstring outputDirW = L"assets/icons"; // <<< CHANGED: Use wstring literal
+            // desiredBaseName 需要是 wstring，wStem 已经是 wstring
+            auto extractedIconPathOpt = IconUtils::ExtractAndSaveIconPng(filePathW, outputDirW, wStem);
             if (extractedIconPathOpt) {
-                data.suggested_icon_path = *extractedIconPathOpt;
-                std::cout << "[ButtonList] Successfully extracted and set icon path from LNK: " << data.suggested_icon_path << std::endl;
+                 // 返回值是 wstring，需要转为 string (UTF-8) 存储
+                data.suggested_icon_path = StringUtils::WideToUtf8(extractedIconPathOpt.value()); // <<< CHANGED: Convert return value
+                std::wcout << L"[ButtonList] Successfully extracted and set icon path from LNK: " << extractedIconPathOpt.value() << std::endl; // <<< CHANGED: Use wcout
             } else {
-                std::cerr << "[ButtonList] Failed to extract icon for LNK " << actionParamUtf8 << std::endl;
+                std::wcerr << L"[ButtonList] Failed to extract icon for LNK " << filePathW << std::endl; // <<< CHANGED: Use wcerr
                 // Keep suggested_icon_path empty or default
             }
         } else {

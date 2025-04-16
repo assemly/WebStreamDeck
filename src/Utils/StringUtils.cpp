@@ -1,6 +1,8 @@
 #include <iostream> // For error logging
 #include <algorithm> // For std::transform
 #include <cctype>    // For towlower
+#include <sstream>   // For std::wstringstream
+#include <iomanip>   // For std::setfill and std::setw
 
 namespace StringUtils {
 
@@ -56,6 +58,17 @@ std::wstring ToLowerW(std::wstring str) {
     std::transform(str.begin(), str.end(), str.begin(),
                    [](wchar_t c){ return towlower(c); });
     return str;
+}
+
+// <<< ADDED: Definition for WStringToHex >>>
+std::wstring WStringToHex(const std::wstring& input) {
+    std::wstringstream ss;
+    ss << std::hex << std::setfill(L'0');
+    for (wchar_t wc : input) {
+        // 输出每个宽字符的十六进制值
+        ss << L" 0x" << std::setw(4) << static_cast<unsigned int>(wc);
+    }
+    return ss.str();
 }
 
 #else
