@@ -28,6 +28,15 @@ public:
     void Show() { m_isVisible = true; }
     void Hide() { m_isVisible = false; }
 
+    void onLayoutChanged();
+
+    // Method to process dropped files
+    #ifdef _WIN32
+    void ProcessDroppedFiles(const std::vector<std::wstring>& files);
+    #else
+    void ProcessDroppedFiles(const std::vector<std::string>& files);
+    #endif
+
 private:
     UIManager& m_uiManager;
     ConfigManager& m_configManager;
@@ -41,6 +50,7 @@ private:
     // Callback handler for edit requests
     void HandleEditRequest(const std::string& buttonId);
     void HandleAddRequest(const PrefilledButtonData& data);
+    void HandleEditCompletion();
 
     // Temporary storage for editing layout settings
     int m_tempPageCount;

@@ -74,6 +74,8 @@ add_executable(${PROJECT_NAME}
     src/UIWindows/UIQrCodeWindow.cpp
     src/UIWindows/UILayoutSettingsWindow.cpp
 
+    src/Application.cpp
+
     src/main.cpp
 )
 

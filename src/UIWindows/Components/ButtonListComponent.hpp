@@ -12,14 +12,6 @@
 // class ConfigManager;
 // class TranslationManager;
 
-// <<< ADDED: Extern declaration for the global dropped files list >>>
-// Defined in main.cpp or another suitable .cpp file
-#ifdef _WIN32
-extern std::vector<std::wstring> g_DroppedFilesW;
-#else
-extern std::vector<std::string> g_DroppedFiles;
-#endif
-
 // <<< ADDED: Structure for pre-filled data from drag-and-drop >>>
 struct PrefilledButtonData {
     std::string suggested_id;
@@ -40,6 +32,13 @@ public:
 
     void Draw();
 
+    // <<< ADDED: Method to process dropped files passed from outside >>>
+    #ifdef _WIN32
+    void ProcessDroppedFiles(const std::vector<std::wstring>& files);
+    #else
+    void ProcessDroppedFiles(const std::vector<std::string>& files);
+    #endif
+
 private:
     ConfigManager& m_configManager;
     TranslationManager& m_translator;
@@ -52,10 +51,10 @@ private:
 
     void DrawDeleteConfirmationModal(); // Helper for the modal
 
-    // <<< MODIFIED: Platform-dependent ProcessDroppedFile signature >>>
+    // Keep the helper for processing a single file
     #ifdef _WIN32
-    void ProcessDroppedFile(const std::wstring& filePathW); // Use wstring on Windows
+    void ProcessDroppedFile(const std::wstring& filePathW); 
     #else
-    void ProcessDroppedFile(const std::string& filePath);  // Use string otherwise
+    void ProcessDroppedFile(const std::string& filePath);  
     #endif
 };

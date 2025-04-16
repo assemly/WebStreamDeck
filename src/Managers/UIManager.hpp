@@ -12,6 +12,7 @@
 #include "../UIWindows/UIStatusLogWindow.hpp"
 #include "../UIWindows/UIQrCodeWindow.hpp"
 #include "../UIWindows/UILayoutSettingsWindow.hpp"
+#include <vector>
 
 
 class UIManager
@@ -26,6 +27,13 @@ public:
     void setServerStatus(bool isRunning, int port);
 
     void notifyLayoutChanged();
+
+    // Method to process dropped files
+    #ifdef _WIN32
+    void ProcessDroppedFiles(const std::vector<std::wstring>& files);
+    #else
+    void ProcessDroppedFiles(const std::vector<std::string>& files);
+    #endif
 
 private:
 

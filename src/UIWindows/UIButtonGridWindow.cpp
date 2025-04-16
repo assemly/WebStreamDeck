@@ -189,3 +189,12 @@ void UIButtonGridWindow::DrawGridCells(const LayoutConfig& layout, const std::ve
         m_uiManager.notifyLayoutChanged();
     }
 }
+
+// <<< ADDED empty implementation >>>
+void UIButtonGridWindow::onLayoutChanged() {
+    // TODO: Implement logic if the grid window needs to react to layout changes
+    // For example, recalculate grid dimensions or clear caches.
+    std::cout << "[UIButtonGridWindow] onLayoutChanged called." << std::endl;
+}
+
+// ... DrawAddButtonPopup, DrawContextMenu ...

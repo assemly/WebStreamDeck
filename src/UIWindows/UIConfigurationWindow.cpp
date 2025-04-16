@@ -6,6 +6,7 @@
 #include <string>            // For std::string manipulation
 #include <filesystem>        // For directory operations
 #include <algorithm>         // For string manipulation (tolower)
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -60,3 +61,21 @@ void UIConfigurationWindow::Draw() {
 
     ImGui::End();
 }
+
+void UIConfigurationWindow::onLayoutChanged() {
+    // TODO: Implement logic if the config window needs to react to layout changes
+    // e.g., refresh displayed data, clear edit state?
+    std::cout << "[UIConfigurationWindow] onLayoutChanged called." << std::endl;
+}
+
+#ifdef _WIN32
+void UIConfigurationWindow::ProcessDroppedFiles(const std::vector<std::wstring>& files) {
+    // Forward the call to the ButtonListComponent member
+    m_buttonListComponent.ProcessDroppedFiles(files);
+}
+#else
+void UIConfigurationWindow::ProcessDroppedFiles(const std::vector<std::string>& files) {
+    // Forward the call to the ButtonListComponent member
+    m_buttonListComponent.ProcessDroppedFiles(files);
+}
+#endif

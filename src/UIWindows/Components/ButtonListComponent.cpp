@@ -57,35 +57,26 @@ ButtonListComponent::ButtonListComponent(ConfigManager& configManager, Translati
 {}
 
 void ButtonListComponent::Draw() {
-    // <<< MODIFIED: Platform-dependent check and processing >>>
+    // <<< REMOVED: Platform-dependent check and processing is now moved >>>
+    /*
     #ifdef _WIN32
     if (!g_DroppedFilesW.empty()) {
-        std::cout << "[ButtonList] Processing " << g_DroppedFilesW.size() << " dropped files (Windows)." << std::endl;
-        // Create a copy to iterate over, in case ProcessDroppedFile modifies the global list indirectly?
-        auto filesToProcess = g_DroppedFilesW;
-        g_DroppedFilesW.clear(); // Clear the global list immediately
-        for (const std::wstring& filePathW : filesToProcess) {
-            ProcessDroppedFile(filePathW); // Call helper with wstring
-        }
+        ...
     }
     #else
     if (!g_DroppedFiles.empty()) {
-        std::cout << "[ButtonList] Processing " << g_DroppedFiles.size() << " dropped files." << std::endl;
-        auto filesToProcess = g_DroppedFiles;
-        g_DroppedFiles.clear();
-        for (const std::string& filePath : filesToProcess) {
-            ProcessDroppedFile(filePath); // Call helper with string
-        }
+        ...
     }
     #endif
-    // <<< END OF MODIFIED PROCESSING >>>
+    */
+    // <<< END OF REMOVED PROCESSING >>>
 
     const auto& buttons = m_configManager.getButtons();
 
     std::string headerLabel = m_translator.get("loaded_buttons_header");
     headerLabel += " (" + std::to_string(buttons.size()) + ")";
 
-    if (ImGui::CollapsingHeader(headerLabel.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader(headerLabel.c_str())) {
         
         // --- Loaded Buttons Table (now directly inside CollapsingHeader) ---
         if (buttons.empty()) {
@@ -130,7 +121,24 @@ void ButtonListComponent::Draw() {
     DrawDeleteConfirmationModal();
 }
 
-// <<< MODIFIED: Platform-dependent implementation of ProcessDroppedFile >>>
+// <<< ADDED: Implementation for the new public method >>>
+#ifdef _WIN32
+void ButtonListComponent::ProcessDroppedFiles(const std::vector<std::wstring>& files) {
+    std::cout << "[ButtonList] Processing " << files.size() << " dropped files (Windows) passed from UIManager." << std::endl;
+    for (const std::wstring& filePathW : files) {
+        ProcessDroppedFile(filePathW); // Call the existing helper for single files
+    }
+}
+#else
+void ButtonListComponent::ProcessDroppedFiles(const std::string>& files) {
+    std::cout << "[ButtonList] Processing " << files.size() << " dropped files passed from UIManager." << std::endl;
+    for (const std::string& filePath : files) {
+        ProcessDroppedFile(filePath); // Call the existing helper for single files
+    }
+}
+#endif
+
+// <<< The existing private ProcessDroppedFile helper remains unchanged >>>
 #ifdef _WIN32
 void ButtonListComponent::ProcessDroppedFile(const std::wstring& filePathW) {
     std::cout << "[ButtonList DEBUG] Processing wstring path: " << WideToUtf8(filePathW) << std::endl;

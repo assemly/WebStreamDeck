@@ -25,6 +25,7 @@ public:
     ~UIButtonGridWindow(); // Destructor to manage resources if needed
 
     void Draw();
+    void onLayoutChanged(); // <<< ADDED declaration
 
     // Helper function to load static textures (moved from UIManager)
     // GLuint LoadTextureFromFile(const char* filename);
@@ -70,4 +71,7 @@ private:
     // void HandleButtonDragSource(const ButtonConfig& button, const ImVec2& buttonSizeVec);
     // void HandleButtonDropTarget(const std::string& currentButtonId, bool& layoutChanged);
     // void HandleButtonContextMenu(const std::string& buttonId, int r, int c);
+
+    void DrawAddButtonPopup();
+    void DrawContextMenu();
 };

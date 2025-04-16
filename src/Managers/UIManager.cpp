@@ -11,6 +11,7 @@
 #include <iphlpapi.h> // For GetAdaptersAddresses
 #include <iostream>   // For std::cerr, std::cout
 #include <qrcodegen.hpp> // Re-add QR Code generation library
+#include <string>
 
 
 // Define STB_IMAGE_IMPLEMENTATION in *one* CPP file before including stb_image.h
@@ -98,6 +99,21 @@ void UIManager::setServerStatus(bool isRunning, int port) {
 
 // <<< MODIFIED: Implementation for notifyLayoutChanged >>>
 void UIManager::notifyLayoutChanged() {
-    std::cout << "[UIManager] Layout changed, notifying NetworkManager to broadcast." << std::endl;
-    m_networkManager.broadcastWebSocketState(); // Call the broadcast method
+    m_buttonGridWindow.onLayoutChanged();
+    m_configWindow.onLayoutChanged(); // Notify config window too if needed
 }
+
+// <<< ADDED: Implementation for processing dropped files >>>
+#ifdef _WIN32
+void UIManager::ProcessDroppedFiles(const std::vector<std::wstring>& files) {
+    // Forward the call to the relevant UI component
+    // Assuming UIConfigurationWindow holds or can access ButtonListComponent
+    // And UIConfigurationWindow has a matching ProcessDroppedFiles method
+    m_configWindow.ProcessDroppedFiles(files);
+}
+#else
+void UIManager::ProcessDroppedFiles(const std::vector<std::string>& files) {
+    // Forward the call
+    m_configWindow.ProcessDroppedFiles(files);
+}
+#endif
