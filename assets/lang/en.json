@@ -92,5 +92,22 @@
     "dnd_dragging_button_prefix": "Dragging",
     "settings_header": "Settings",
     "setting_start_on_boot": "Start with system",
-    "setting_start_minimized": "Start minimized to tray"
+    "setting_start_minimized": "Start minimized to tray",
+    "close_button": "Close",
+    "about_window_title": "About",
+    "app_name": "WebStreamDeck",
+    "about_description": "Control your PC actions from any device with a web browser on your local network. Configure buttons to launch applications, open URLs, trigger hotkeys, control media, and more.",
+    "about_version": "Version",
+    "about_developer": "Developer",
+    "about_usage_title": "Usage Hints:",
+    "about_usage_1": "Configure buttons in the 'Configuration' window.",
+    "about_usage_2": "Arrange buttons on pages in the 'Layout Settings' window.",
+    "about_usage_3": "Scan the QR code or enter the address in your device's browser to connect.",
+    "menu_file": "File",
+    "menu_file_exit": "Exit",
+    "menu_view": "View",
+    "menu_help": "Help",
+    "menu_help_about": "About",
+    "about_bilibili_profile": "Bilibili Profile",
+    "about_testers": "Testers"
 }

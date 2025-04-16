@@ -12,6 +12,7 @@
 #include "../UIWindows/UIStatusLogWindow.hpp"
 #include "../UIWindows/UIQrCodeWindow.hpp"
 #include "../UIWindows/UILayoutSettingsWindow.hpp"
+#include "../UIWindows/UIAboutWindow.hpp"
 #include <vector>
 
 
@@ -48,6 +49,7 @@ private:
     UIStatusLogWindow m_statusLogWindow;
     UIQrCodeWindow m_qrCodeWindow;
     UILayoutSettingsWindow m_layoutSettingsWindow;
+    UIAboutWindow m_aboutWindow;
 
     NetworkManager& m_networkManager;
     TranslationManager& m_translationManager;

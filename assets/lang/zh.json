@@ -92,5 +92,22 @@
     "dnd_dragging_button_prefix": "拖动中",
     "settings_header": "设置",
     "setting_start_on_boot": "开机启动",
-    "setting_start_minimized": "启动时最小化到托盘"
+    "setting_start_minimized": "启动时最小化到托盘",
+    "close_button": "关闭",
+    "about_window_title": "关于",
+    "app_name": "WebStreamDeck",
+    "about_description": "通过本地网络上任何带有网络浏览器的设备来控制您的 PC 操作。配置按钮以启动应用程序、打开 URL、触发热键、控制媒体等。",
+    "about_version": "版本",
+    "about_developer": "开发者",
+    "about_usage_title": "使用提示：",
+    "about_usage_1": "在\"配置\"窗口中配置按钮。",
+    "about_usage_2": "在\"布局设置\"窗口中排列页面上的按钮。",
+    "about_usage_3": "扫描二维码或在设备的浏览器中输入地址以进行连接。",
+    "menu_file": "文件",
+    "menu_file_exit": "退出",
+    "menu_view": "视图",
+    "menu_help": "帮助",
+    "menu_help_about": "关于",
+    "about_bilibili_profile": "B站主页",
+    "about_testers": "测试人员"
 }

@@ -29,6 +29,7 @@ UIManager::UIManager(ConfigManager& configManager, ActionRequestManager& actionR
       m_statusLogWindow(translationManager),
       m_qrCodeWindow(translationManager),
       m_layoutSettingsWindow(configManager, translationManager, *this), // <<< ADDED: Initialize new window
+      m_aboutWindow(translationManager), // <<< ADDED: Initialize About window
       m_networkManager(networkManager), // Initialize NetworkManager reference
       m_translationManager(translationManager) // <<< ADDED: Initialize TranslationManager reference
 {
@@ -76,6 +77,7 @@ void UIManager::drawUI()
         m_serverIP = NetworkUtils::GetLocalIPv4();
     });
     m_layoutSettingsWindow.Draw(); // <<< Draw the layout settings window
+    m_aboutWindow.Draw();      // <<< ADDED: Draw the About window
 
     // <<< ADDED: End the DockSpace window >>>
     ImGui::End(); 

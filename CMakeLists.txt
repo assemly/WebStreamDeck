@@ -72,11 +72,13 @@ set(APP_SOURCES
     src/UIWindows/Components/ButtonSelectorPopupComponent.cpp
     src/UIWindows/Components/GridCellComponent.cpp
 
+
     src/UIWindows/UIButtonGridWindow.cpp
     src/UIWindows/UIConfigurationWindow.cpp
     src/UIWindows/UIStatusLogWindow.cpp
     src/UIWindows/UIQrCodeWindow.cpp
     src/UIWindows/UILayoutSettingsWindow.cpp
+    src/UIWindows/UIAboutWindow.cpp
 
     src/Application.cpp
 
