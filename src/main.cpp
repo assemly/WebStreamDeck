@@ -14,8 +14,8 @@
 
 
 // --- Simplified Main Function ---
-// int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
-int main(int argc, char** argv)
+// int main(int argc, char** argv)
+int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
     // Exception handling can be added here if Application constructor throws
     try {

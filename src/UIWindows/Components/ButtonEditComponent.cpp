@@ -5,6 +5,10 @@
 #include <cstring>  // For strncpy, memset
 #include <algorithm> // For std::find, std::replace, std::string conversion
 #include <string>    // For std::string
+#include <nfd.h>     // <<< ADDED: Include NFD header
+#include "../../Utils/InputUtils.hpp" // <<< ADDED: Include InputUtils for hotkey capture
+
+// #include <ImGuiFileDialog.h> // <<< REMOVED (or ensure it's removed from ButtonEditComponent.hpp too)
 
 // Constructor
 ButtonEditComponent::ButtonEditComponent(ConfigManager& configManager, TranslationManager& translator)
@@ -88,45 +92,6 @@ void ButtonEditComponent::ClearForm() {
     m_addingNew = false; // Reset adding flag too
     if (!cancelledId.empty()) {
         std::cout << "[ButtonEditComponent] Edit cancelled/cleared for button ID: " << cancelledId << std::endl;
-    }
-}
-
-// Handle results from ImGuiFileDialog
-void ButtonEditComponent::HandleFileDialog() {
-    std::string selectedFilePath;
-    bool updateParam = false;
-    bool updateIcon = false;
-
-    ImVec2 minSize = ImVec2(600, 400);
-    ImVec2 maxSize = ImVec2(FLT_MAX, FLT_MAX);
-
-    // Dialog for selecting Application File (Action Param)
-    // Use keys unique to this component instance if multiple instances could exist
-    if (ImGuiFileDialog::Instance()->Display("SelectAppDlgKey_BtnEdit", ImGuiWindowFlags_NoCollapse, minSize, maxSize)) {
-        if (ImGuiFileDialog::Instance()->IsOk()) {
-            selectedFilePath = ImGuiFileDialog::Instance()->GetFilePathName();
-            updateParam = true;
-        }
-        ImGuiFileDialog::Instance()->Close();
-    }
-
-    // Dialog for selecting Icon File (Icon Path)
-    if (ImGuiFileDialog::Instance()->Display("SelectIconDlgKey_BtnEdit", ImGuiWindowFlags_NoCollapse, minSize, maxSize)) {
-        if (ImGuiFileDialog::Instance()->IsOk()) {
-            selectedFilePath = ImGuiFileDialog::Instance()->GetFilePathName();
-            updateIcon = true;
-        }
-        ImGuiFileDialog::Instance()->Close();
-    }
-
-    // Update buffers
-    if (updateParam) {
-        strncpy(m_newButtonActionParam, selectedFilePath.c_str(), sizeof(m_newButtonActionParam) - 1);
-        m_newButtonActionParam[sizeof(m_newButtonActionParam) - 1] = '\\0';
-    }
-    if (updateIcon) {
-        strncpy(m_newButtonIconPath, selectedFilePath.c_str(), sizeof(m_newButtonIconPath) - 1);
-        m_newButtonIconPath[sizeof(m_newButtonIconPath) - 1] = '\\0';
     }
 }
 
@@ -315,22 +280,7 @@ void ButtonEditComponent::Draw() {
                      float inputWidth = ImGui::GetContentRegionAvail().x - browseButtonWidth;
                      ImGui::PushItemWidth(inputWidth > 0 ? inputWidth : -FLT_MIN);
                      
-                     // <<< REVERTED: Directly use m_newButtonActionParam >>>
-                     /* char displayBuffer[sizeof(m_newButtonActionParam)];
-                     strncpy(displayBuffer, m_newButtonActionParam, sizeof(displayBuffer) - 1);
-                     displayBuffer[sizeof(displayBuffer) - 1] = '\0'; 
-                     for (char* p = displayBuffer; *p != '\0'; ++p) {
-                         if (*p == '\\') { *p = '/'; } // Display / instead of \
-                     }*/
-                     // Use the original buffer directly
                      ImGui::InputText("##ActionParamInputOther_EditComp", m_newButtonActionParam, sizeof(m_newButtonActionParam));
-                     /* if (edited) { // No need to convert back if using original buffer directly
-                         std::string editedStr = displayBuffer;
-                         std::replace(editedStr.begin(), editedStr.end(), '/', '\\');
-                         strncpy(m_newButtonActionParam, editedStr.c_str(), sizeof(m_newButtonActionParam) - 1);
-                         m_newButtonActionParam[sizeof(m_newButtonActionParam) - 1] = '\0'; 
-                     }*/
-                     // <<< END REVERTED >>>
 
                      ImGui::PopItemWidth();
                      if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("action_param_tooltip").c_str()); }
@@ -338,15 +288,24 @@ void ButtonEditComponent::Draw() {
                      if (isLaunchAppAction) {
                          ImGui::SameLine();
                          if (ImGui::Button("...##AppBrowse_EditComp")) { // Consistent "..." button
-                             const char* title = m_translator.get("select_app_dialog_title").c_str();
-                             const char* key = "SelectAppDlgKey_BtnEdit"; // Key specific to this component
+                             nfdchar_t *outPath = NULL;
                              #ifdef _WIN32
-                             const char* filters = ".exe{.exe}";
+                             nfdfilteritem_t filt[3] = { { "Executable files", "exe" }, { "Batch files", "bat" }, { "Command files", "cmd" } };
                              #else
-                             const char* filters = ".*";
+                             nfdfilteritem_t filt[1] = { { "All files", "*" } }; // Simpler filter for non-windows
                              #endif
-                             IGFD::FileDialogConfig config; config.path = ".";
-                             ImGuiFileDialog::Instance()->OpenDialog(key, title, filters, config);
+                             nfdresult_t result = NFD_OpenDialog(&outPath, filt, sizeof(filt)/sizeof(nfdfilteritem_t), NULL); // NULL for default path
+
+                             if (result == NFD_OKAY) {
+                                 std::cout << "[ButtonEditComponent] App selected: " << outPath << std::endl;
+                                 strncpy(m_newButtonActionParam, outPath, sizeof(m_newButtonActionParam) - 1);
+                                 m_newButtonActionParam[sizeof(m_newButtonActionParam) - 1] = '\\0'; // Ensure null termination
+                                 NFD_FreePath(outPath); // IMPORTANT: Free the path returned by NFD
+                             } else if (result == NFD_CANCEL) {
+                                 std::cout << "[ButtonEditComponent] App selection cancelled." << std::endl;
+                             } else { // NFD_ERROR or unexpected
+                                 std::cerr << "[ButtonEditComponent] Error selecting app: " << NFD_GetError() << std::endl;
+                             }
                          }
                      }
                 }
@@ -388,11 +347,26 @@ void ButtonEditComponent::Draw() {
                 ImGui::PopItemWidth();
                 ImGui::SameLine();
                 if (ImGui::Button("...##IconBrowse_EditComp")) {
-                     const char* title = m_translator.get("select_icon_dialog_title").c_str();
-                     const char* key = "SelectIconDlgKey_BtnEdit"; // Key specific to this component
-                     const char* filters = "Image files (*.png *.jpg *.jpeg *.bmp *.gif){.png,.jpg,.jpeg,.bmp,.gif},.*";
-                     IGFD::FileDialogConfig config; config.path = ".";
-                     ImGuiFileDialog::Instance()->OpenDialog(key, title, filters, config);
+                    nfdchar_t *outPathIcon = NULL;
+                    nfdfilteritem_t filt_icon[2] = {
+                        { "Image Files", "png,jpg,jpeg,bmp,gif" },
+                        { "All Files", "*" }
+                    };
+                    nfdresult_t resultIcon = NFD_OpenDialog(&outPathIcon, filt_icon, sizeof(filt_icon)/sizeof(nfdfilteritem_t), NULL);
+
+                    if (resultIcon == NFD_OKAY) {
+                         std::cout << "[ButtonEditComponent] Icon selected: " << outPathIcon << std::endl;
+                         // Normalize to forward slashes before storing
+                         std::string selectedIconPathStr = outPathIcon;
+                         std::replace(selectedIconPathStr.begin(), selectedIconPathStr.end(), '\\', '/'); // <<< FIXED: Use single backslash char literal
+                         strncpy(m_newButtonIconPath, selectedIconPathStr.c_str(), sizeof(m_newButtonIconPath) - 1);
+                         m_newButtonIconPath[sizeof(m_newButtonIconPath) - 1] = '\0'; // Ensure null termination
+                         NFD_FreePath(outPathIcon); // IMPORTANT: Free the path returned by NFD
+                    } else if (resultIcon == NFD_CANCEL) {
+                        std::cout << "[ButtonEditComponent] Icon selection cancelled." << std::endl;
+                    } else { // NFD_ERROR or unexpected
+                         std::cerr << "[ButtonEditComponent] Error selecting icon: " << NFD_GetError() << std::endl;
+                    }
                 }
                 if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("button_icon_tooltip").c_str()); }
             } // End Icon Path scope
@@ -418,10 +392,6 @@ void ButtonEditComponent::Draw() {
         }
 
     } // End of CollapsingHeader
-
-    // --- File Dialog Handling --- (outside the collapsing header)
-    // Must be called every frame to handle potential dialog display
-    HandleFileDialog();
 
     ImGui::PopID();
     

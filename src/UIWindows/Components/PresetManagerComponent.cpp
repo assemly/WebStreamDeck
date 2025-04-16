@@ -136,7 +136,7 @@ void PresetManagerComponent::Draw() {
                 if (m_configManager.saveConfigToPreset(newName)) { // saveConfigToPreset already handles Unicode filenames
                     std::cout << "[PresetComponent] Preset saved successfully. Refreshing list." << std::endl;
                     scanPresetDirectory();
-                    m_newPresetNameBuffer[0] = '\\0';
+                    memset(m_newPresetNameBuffer, 0, sizeof(m_newPresetNameBuffer));
                 } else {
                      std::cerr << "[PresetComponent] Failed to save preset: " << newName << std::endl;
                 }

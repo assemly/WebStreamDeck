@@ -37,6 +37,7 @@ find_package(unofficial-uwebsockets CONFIG REQUIRED)  # CORRECTED: Use package n
 find_package(GLEW REQUIRED) # Find GLEW
 find_package(Stb REQUIRED) # Find stb via vcpkg (Module mode, Capitalized)
 find_package(GIF REQUIRED) 
+find_package(nfd CONFIG REQUIRED) # <<< CHANGED: Find NFD using 'nfd' as suggested by vcpkg
 
 # Add local third-party library: qrcodegen
 add_library(qrcodegen_lib third_party/QR-Code-generator-1.8.0/qrcodegen.cpp)
@@ -105,6 +106,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     qrcodegen_lib         # Link the local qrcodegen library target
     # stb::stb              # Link stb via vcpkg # REMOVED: stb is likely header-only, no target to link
     GIF::GIF              # ADDED: Link against giflib target (as suggested by vcpkg)
+    nfd::nfd # <<< CHANGED: Link NFD target using 'nfd::nfd' as suggested by vcpkg
 )
 
 # Copy the web directory to the executable output directory after build
@@ -136,5 +138,5 @@ endif()
 if(WIN32)
     set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
     #target_link_options(${PROJECT_NAME} PRIVATE "/SUBSYSTEM:WINDOWS") # Use WinMain
-    target_link_options(${PROJECT_NAME} PRIVATE "/SUBSYSTEM:CONSOLE") # Use main
+    #target_link_options(${PROJECT_NAME} PRIVATE "/SUBSYSTEM:CONSOLE") # Use main
 endif() 
