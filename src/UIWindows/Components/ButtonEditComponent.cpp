@@ -2,7 +2,8 @@
 #include "ButtonEditComponent.hpp"
 #include <imgui.h>
 #include <iostream> // For logging
-#include <cstring>  // For strncpy
+#include <cstring>  // For strncpy, memset
+#include <algorithm> // For std::find
 
 // Constructor
 ButtonEditComponent::ButtonEditComponent(ConfigManager& configManager, TranslationManager& translator)
@@ -12,7 +13,11 @@ ButtonEditComponent::ButtonEditComponent(ConfigManager& configManager, Translati
 
 // Public method called by parent window to initiate editing
 void ButtonEditComponent::StartEdit(const ButtonConfig& btnCfg) {
-    m_editingButtonId = btnCfg.id; // Mark as editing
+    std::cout << "[ButtonEditComponent] Starting edit for ID: " << btnCfg.id << std::endl;
+    ClearForm(); // Clear first to reset everything
+    m_editingButtonId = btnCfg.id; // Mark as editing *existing*
+    m_addingNew = false;          // Explicitly not adding new
+
     strncpy(m_newButtonId, btnCfg.id.c_str(), sizeof(m_newButtonId) - 1); m_newButtonId[sizeof(m_newButtonId) - 1] = 0;
     strncpy(m_newButtonName, btnCfg.name.c_str(), sizeof(m_newButtonName) - 1); m_newButtonName[sizeof(m_newButtonName) - 1] = 0;
     strncpy(m_newButtonActionParam, btnCfg.action_param.c_str(), sizeof(m_newButtonActionParam) - 1); m_newButtonActionParam[sizeof(m_newButtonActionParam) - 1] = 0;
@@ -26,7 +31,6 @@ void ButtonEditComponent::StartEdit(const ButtonConfig& btnCfg) {
             break;
         }
     }
-    // Handle case where action type wasn't found (set to 0 or log error?)
     if (m_newButtonActionTypeIndex == -1) {
         std::cerr << "[ButtonEditComponent] Warning: Action type '" << btnCfg.action_type << "' for button ID '" << btnCfg.id << "' not found. Defaulting." << std::endl;
         m_newButtonActionTypeIndex = 0; // Default to the first type
@@ -35,6 +39,38 @@ void ButtonEditComponent::StartEdit(const ButtonConfig& btnCfg) {
     m_isCapturingHotkey = false; // Ensure capture mode is off when starting edit
     m_manualHotkeyEntry = false; // Reset manual entry flag
     std::cout << "[ButtonEditComponent] Started editing button: " << m_editingButtonId << std::endl;
+}
+
+// <<< ADDED: Implementation for starting add with prefilled data >>>
+void ButtonEditComponent::StartAddNewPrefilled(const PrefilledButtonData& data) {
+    std::cout << "[ButtonEditComponent] Starting add new prefilled. Suggested ID: " << data.suggested_id << std::endl;
+    ClearForm(); // Clear first
+    m_editingButtonId = ""; // Ensure not in edit mode
+    m_addingNew = true;     // Set adding flag
+
+    // Copy prefilled data, ensuring null termination
+    strncpy(m_newButtonId, data.suggested_id.c_str(), sizeof(m_newButtonId) - 1);
+    m_newButtonId[sizeof(m_newButtonId) - 1] = '\0';
+
+    strncpy(m_newButtonName, data.suggested_name.c_str(), sizeof(m_newButtonName) - 1);
+    m_newButtonName[sizeof(m_newButtonName) - 1] = '\0';
+
+    strncpy(m_newButtonActionParam, data.action_param.c_str(), sizeof(m_newButtonActionParam) - 1);
+    m_newButtonActionParam[sizeof(m_newButtonActionParam) - 1] = '\0';
+
+    strncpy(m_newButtonIconPath, data.suggested_icon_path.c_str(), sizeof(m_newButtonIconPath) - 1);
+    m_newButtonIconPath[sizeof(m_newButtonIconPath) - 1] = '\0';
+
+    // Find action type index
+    m_newButtonActionTypeIndex = -1;
+    auto it = std::find(m_supportedActionTypes.begin(), m_supportedActionTypes.end(), data.action_type);
+    if (it != m_supportedActionTypes.end()) {
+        m_newButtonActionTypeIndex = static_cast<int>(std::distance(m_supportedActionTypes.begin(), it));
+    } else {
+        std::cerr << "[ButtonEditComponent] Warning: Prefilled action type '" << data.action_type << "' not supported. Defaulting." << std::endl;
+        m_newButtonActionTypeIndex = 0; // Default to first type
+    }
+     // m_isCapturingHotkey and m_manualHotkeyEntry are reset by ClearForm()
 }
 
 // Helper to clear the form fields and exit edit mode
@@ -48,6 +84,7 @@ void ButtonEditComponent::ClearForm() {
     m_editingButtonId = ""; // Exit edit mode
     m_isCapturingHotkey = false;
     m_manualHotkeyEntry = false;
+    m_addingNew = false; // Reset adding flag too
     if (!cancelledId.empty()) {
         std::cout << "[ButtonEditComponent] Edit cancelled/cleared for button ID: " << cancelledId << std::endl;
     }

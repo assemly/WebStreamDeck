@@ -10,6 +10,8 @@
 #include <GL/glew.h>      // Include GLEW header (now safe after GLFW_INCLUDE_NONE)
 #include <memory> // For std::unique_ptr
 #include <iostream> // For std::cerr
+#include <vector>   // <<< ADDED for global dropped files vector
+#include <string>   // <<< ADDED for std::string
 
 #ifdef _WIN32
 // Define WIN32_LEAN_AND_MEAN before including windows.h to exclude older Winsock APIs
@@ -26,6 +28,51 @@
 #include "Managers/TranslationManager.hpp" // Include TranslationManager header
 #include "Utils/InputUtils.hpp" // For audio control init/uninit
 #include "Utils/TextureLoader.hpp" // <<< ADDED
+
+// <<< ADDED: Global variable to store dropped file paths (using wstring for Windows) >>>
+// Use a mutex if multi-threading becomes a concern later, but for simple cases this is okay.
+#ifdef _WIN32
+std::vector<std::wstring> g_DroppedFilesW;
+#else
+std::vector<std::string> g_DroppedFiles; // Use string for non-Windows
+#endif
+
+// <<< ADDED: GLFW Drop Callback Implementation >>>
+void drop_callback(GLFWwindow* window, int count, const char** paths)
+{
+    std::cout << "[GLFW Callback] Drop event detected with " << count << " item(s)." << std::endl;
+    #ifdef _WIN32
+        UINT acp = GetACP(); // <<< Keep this for logging, but don't use for conversion below
+        std::cout << "[GLFW Callback] System Active Code Page: " << acp << " (Note: Assuming GLFW provides UTF-8)" << std::endl;
+        g_DroppedFilesW.clear(); // Clear previous paths
+        for (int i = 0; i < count; ++i) {
+            if (paths[i]) {
+                // Convert path from GLFW (assuming UTF-8) to wstring
+                int utf8Len = MultiByteToWideChar(CP_UTF8, 0, paths[i], -1, NULL, 0);
+                if (utf8Len > 0) {
+                    std::wstring wPath(utf8Len, 0);
+                    MultiByteToWideChar(CP_UTF8, 0, paths[i], -1, &wPath[0], utf8Len);
+                    wPath.pop_back(); // Remove null terminator added by MultiByteToWideChar
+                    g_DroppedFilesW.push_back(wPath);
+                    // Note: Logging wstring directly to std::cout might not display correctly depending on locale
+                    // Convert back to UTF-8 for logging if needed, or use std::wcout
+                     std::cout << "  - Dropped path added (as wstring). Original: " << paths[i] << std::endl; 
+                } else {
+                    std::cerr << "[GLFW Callback] Failed to convert dropped path to wstring: " << paths[i] << std::endl;
+                }
+            }
+        }
+    #else
+        // Non-Windows: Assume paths are UTF-8
+        g_DroppedFiles.clear();
+        for (int i = 0; i < count; ++i) {
+            if (paths[i]) { 
+                g_DroppedFiles.push_back(std::string(paths[i]));
+                std::cout << "  - Dropped path added: " << paths[i] << std::endl;
+            }
+        }
+    #endif
+}
 
 static void glfw_error_callback(int error, const char* description)
 {
@@ -54,6 +101,9 @@ int main(int argc, char** argv)
         return 1;
     }
     glfwMakeContextCurrent(window);
+
+    // <<< ADDED: Register the drop callback AFTER creating the window >>>
+    glfwSetDropCallback(window, drop_callback);
 
     // Initialize GLEW *after* creating the OpenGL context
     GLenum err = glewInit();

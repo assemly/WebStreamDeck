@@ -8,6 +8,7 @@
 #include "../../Utils/InputUtils.hpp" // For hotkey capture
 // Forward declare ImGuiFileDialog if only pointers/references are used, or include header
 #include <ImGuiFileDialog.h> // Include directly as we use its Instance()
+#include "../Components/ButtonListComponent.hpp" // For PrefilledButtonData
 
 class ButtonEditComponent {
 public:
@@ -17,6 +18,12 @@ public:
 
     // Public method to start editing an existing button
     void StartEdit(const ButtonConfig& buttonConfig);
+
+    // Public method to start adding a new button with prefilled data
+    void StartAddNewPrefilled(const PrefilledButtonData& data);
+
+    // Helper to check if the component is currently in edit/add mode
+    bool IsEditingOrAdding() const { return !m_editingButtonId.empty() || m_addingNew; }
 
 private:
     ConfigManager& m_configManager;
@@ -29,6 +36,7 @@ private:
     char m_newButtonActionParam[256] = "";
     char m_newButtonIconPath[256] = "";
     std::string m_editingButtonId = ""; // If not empty, we are in edit mode
+    bool m_addingNew = false;          // Flag specifically for when adding new (vs. editing)
     bool m_isCapturingHotkey = false;
     bool m_manualHotkeyEntry = false;
 

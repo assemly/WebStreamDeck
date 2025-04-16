@@ -40,6 +40,7 @@ private:
 
     // Callback handler for edit requests
     void HandleEditRequest(const std::string& buttonId);
+    void HandleAddRequest(const PrefilledButtonData& data);
 
     // Temporary storage for editing layout settings
     int m_tempPageCount;

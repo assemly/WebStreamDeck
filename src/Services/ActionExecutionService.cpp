@@ -173,9 +173,17 @@ void ActionExecutionService::executeAction(const std::string& actionType, const 
 
 bool ActionExecutionService::executeLaunchApp(const std::string& path) {
 #ifdef _WIN32
-    HINSTANCE result = ShellExecuteA(NULL, "open", path.c_str(), NULL, NULL, SW_SHOWNORMAL);
+    // Convert UTF-8 path std::string to std::wstring for ShellExecuteW
+    std::wstring wPath = StringToWstring(path); // Use existing helper
+    if (wPath.empty() && !path.empty()) { // Check if conversion failed
+        std::cerr << "Error executing launch_app: Failed to convert path to wstring: " << path << std::endl;
+        return false;
+    }
+
+    HINSTANCE result = ShellExecuteW(NULL, L"open", wPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
     if ((intptr_t)result <= 32) { 
-        std::cerr << "Error executing launch_app: Failed to launch '" << path << "' (Error code: " << (intptr_t)result << ")" << std::endl;
+        // Log the original path for clarity, as wPath might not display well in std::cerr
+        std::cerr << "Error executing launch_app: Failed to launch '" << path << "' (ShellExecuteW Error code: " << (intptr_t)result << ")" << std::endl;
         return false;
     }
     return true;
@@ -192,9 +200,17 @@ bool ActionExecutionService::executeLaunchApp(const std::string& path) {
 
 bool ActionExecutionService::executeOpenUrl(const std::string& url) {
 #ifdef _WIN32
-    HINSTANCE result = ShellExecuteA(NULL, "open", url.c_str(), NULL, NULL, SW_SHOWNORMAL);
+    // Convert UTF-8 url std::string to std::wstring for ShellExecuteW
+    std::wstring wUrl = StringToWstring(url);
+    if (wUrl.empty() && !url.empty()) { // Check if conversion failed
+        std::cerr << "Error executing open_url: Failed to convert URL to wstring: " << url << std::endl;
+        return false;
+    }
+
+    HINSTANCE result = ShellExecuteW(NULL, L"open", wUrl.c_str(), NULL, NULL, SW_SHOWNORMAL);
     if ((intptr_t)result <= 32) {
-         std::cerr << "Error executing open_url: Failed to open '" << url << "' (Error code: " << (intptr_t)result << ")" << std::endl;
+         // Log the original url for clarity
+         std::cerr << "Error executing open_url: Failed to open '" << url << "' (ShellExecuteW Error code: " << (intptr_t)result << ")" << std::endl;
          return false;
     }
     return true;

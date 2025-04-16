@@ -73,7 +73,7 @@ const ui = (() => {
         // console.log(`Calculated available height for grid: ${availableHeight}`);
 
         // Reset grid before rendering
-        buttonGrid.innerHTML = '';
+        buttonGrid.innerHTML = ''; 
         buttonGrid.className = 'button-grid'; // Base class
         buttonGrid.style.cssText = ''; // Reset inline styles specifically for height override later
         // Set the calculated height
@@ -86,7 +86,7 @@ const ui = (() => {
         }
         // Reset pagination display (will be set correctly later if needed)
         paginationDotsContainer.innerHTML = '';
-        paginationDotsContainer.style.display = 'none';
+        paginationDotsContainer.style.display = 'none'; 
 
         removeSwipeListeners(); // Remove listeners by default
 
@@ -94,7 +94,7 @@ const ui = (() => {
         if (!currentLayout || !buttonsById) {
              console.error("UI: Missing layout or button data for rendering.");
              buttonGrid.innerHTML = 'Error: Missing data.';
-             return;
+            return;
         }
 
 
@@ -152,7 +152,7 @@ const ui = (() => {
             const pageIndex = pageEntry[0];
             const pageLayout = pageEntry[1];
             const pageElement = document.createElement('div');
-            pageElement.className = 'button-page';
+            pageElement.className = 'button-page'; 
             pageElement.dataset.pageIndex = pageIndex; // Add data attribute for reference
 
             if (!pageLayout) {
@@ -300,7 +300,7 @@ const ui = (() => {
     }
 
 
-    // --- Helper: Create Button Element ---
+    // --- Helper: Create Button Element --- 
     function createButtonElement(buttonData) {
         const btnElement = document.createElement('button');
         btnElement.className = 'grid-button';
@@ -327,10 +327,10 @@ const ui = (() => {
                 imgElement.remove(); // Remove broken image icon
                 // Ensure text is visible if icon fails
                 if (!btnElement.querySelector('.button-text')) {
-                    const textElementFallback = document.createElement('span');
-                    textElementFallback.className = 'button-text';
+                     const textElementFallback = document.createElement('span');
+                     textElementFallback.className = 'button-text';
                     textElementFallback.textContent = buttonData.name;
-                    btnElement.appendChild(textElementFallback);
+                     btnElement.appendChild(textElementFallback);
                 }
             };
             btnElement.appendChild(imgElement);
@@ -376,32 +376,32 @@ const ui = (() => {
         buttonGrid.addEventListener('touchstart', handleTouchStart, { passive: true });
         buttonGrid.addEventListener('touchmove', handleTouchMove, { passive: false });
         buttonGrid.addEventListener('touchend', handleTouchEnd, { passive: true });
-     }
+    }
     function removeSwipeListeners() {
         // console.log("Removing swipe listeners");
         buttonGrid.removeEventListener('touchstart', handleTouchStart);
         buttonGrid.removeEventListener('touchmove', handleTouchMove);
         buttonGrid.removeEventListener('touchend', handleTouchEnd);
-     }
+    }
     function handleTouchStart(event) {
         const needsPagination = !isPortraitMode && currentLayout && currentLayout.page_count > 1;
         if (event.touches.length > 1 || !needsPagination) return; 
         touchStartX = event.touches[0].clientX;
         touchMoveX = touchStartX;
         isSwiping = false;
-     }
+    }
     function handleTouchMove(event) {
          const needsPagination = !isPortraitMode && currentLayout && currentLayout.page_count > 1;
         if (event.touches.length > 1 || !needsPagination) return; 
         touchMoveX = event.touches[0].clientX;
         const deltaX = touchMoveX - touchStartX;
-        if (Math.abs(deltaX) > 10 && !isSwiping) {
-            isSwiping = true;
+        if (Math.abs(deltaX) > 10 && !isSwiping) { 
+             isSwiping = true;
         }
         if (isSwiping) {
             event.preventDefault(); // Prevent vertical scroll while swiping horizontally
         }
-     }
+    }
     function handleTouchEnd(event) {
         const needsPagination = !isPortraitMode && currentLayout && currentLayout.page_count > 1;
         if (!isSwiping || !needsPagination) { 
@@ -420,12 +420,12 @@ const ui = (() => {
             // Tap or insufficient swipe - do nothing regarding page change
         }
         resetSwipeState();
-     }
+    }
     function resetSwipeState() {
         touchStartX = 0;
         touchMoveX = 0;
         isSwiping = false;
-     }
+    }
 
     // --- Page Navigation --- 
     function goToPage(pageIndex) {
@@ -444,13 +444,13 @@ const ui = (() => {
         updatePaginationDots();
     }
 
-    // --- Update Pagination Dots ---
+    // --- Update Pagination Dots --- 
     function updatePaginationDots() {
         const dots = paginationDotsContainer.querySelectorAll('.dot');
         dots.forEach((dot, index) => {
             dot.classList.toggle('active', index === currentPageIndex);
         });
-     }
+    }
 
     // --- Full Screen ---
     function toggleFullScreen() {
@@ -465,7 +465,7 @@ const ui = (() => {
         }
     }
 
-    // --- Initialization ---
+    // --- Initialization --- 
     function init() {
         console.log("UI Module Initialized");
 
@@ -506,7 +506,7 @@ const ui = (() => {
         };
     }
 
-    // --- Public API ---
+    // --- Public API --- 
     return {
         init,
         loadInitialData, // Exposed function to load data

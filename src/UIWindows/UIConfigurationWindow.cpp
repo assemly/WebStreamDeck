@@ -14,8 +14,9 @@ UIConfigurationWindow::UIConfigurationWindow(UIManager& uiManager, ConfigManager
       m_configManager(configManager),
       m_translator(translationManager),
       m_presetManagerComponent(configManager, translationManager, uiManager),
-      m_buttonListComponent(configManager, translationManager, 
-                          [this](const std::string& id){ this->HandleEditRequest(id); }),
+      m_buttonListComponent(configManager, translationManager,
+                          [this](const std::string& id){ this->HandleEditRequest(id); },
+                          [this](const PrefilledButtonData& data){ this->HandleAddRequest(data); }),
       m_buttonEditComponent(configManager, translationManager)
 {
     loadCurrentSettings(); // Load initial layout settings
@@ -29,6 +30,14 @@ void UIConfigurationWindow::HandleEditRequest(const std::string& buttonId) {
     } else {
         std::cerr << "[UIConfigWindow] Error: Button with ID " << buttonId << " not found for editing." << std::endl;
     }
+}
+
+void UIConfigurationWindow::HandleAddRequest(const PrefilledButtonData& data) {
+    std::cout << "[UIConfigWindow] Received add request from drop. Suggested ID: " << data.suggested_id << std::endl;
+    if (m_configManager.getButtonById(data.suggested_id)) {
+         std::cerr << "[UIConfigWindow] Warning: Suggested ID '" << data.suggested_id << "' already exists. User must change it." << std::endl;
+    }
+    m_buttonEditComponent.StartAddNewPrefilled(data);
 }
 
 void UIConfigurationWindow::loadCurrentSettings() {
