@@ -7,8 +7,44 @@
 #include <string>    // For std::string
 #include <nfd.h>     // <<< ADDED: Include NFD header
 #include "../../Utils/InputUtils.hpp" // <<< ADDED: Include InputUtils for hotkey capture
+#include "../../Utils/StringUtils.hpp"
+#include <filesystem> // <<< ADDED: For path operations
 
 // #include <ImGuiFileDialog.h> // <<< REMOVED (or ensure it's removed from ButtonEditComponent.hpp too)
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h> // For GetModuleFileNameW, MAX_PATH
+#endif
+
+namespace fs = std::filesystem;
+
+// <<< ADDED: Helper function to get executable directory (Windows) >>>
+#ifdef _WIN32
+std::wstring GetExecutableDirectoryW() {
+    wchar_t path[MAX_PATH] = {0};
+    if (GetModuleFileNameW(NULL, path, MAX_PATH) == 0) {
+        std::cerr << "[GetExecutableDirectoryW] GetModuleFileNameW failed. Error code: " << GetLastError() << std::endl;
+        return L"";
+    }
+    try {
+        fs::path exePath(path);
+        return exePath.parent_path().wstring();
+    } catch (const std::exception& e) {
+        std::wcerr << L"[GetExecutableDirectoryW] Filesystem error getting parent path from: " << path << L". Error: " << e.what() << std::endl;
+        return L"";
+    }
+}
+#else
+// TODO: Implement for other platforms if needed
+std::string GetExecutableDirectory() {
+    // Placeholder for non-Windows
+    // Could use methods from <filesystem> if available and suitable,
+    // or platform-specific APIs (e.g., readlink("/proc/self/exe") on Linux)
+    std::cerr << "[GetExecutableDirectory] Not implemented for this platform." << std::endl;
+    return "."; // Return current directory as a fallback
+}
+#endif
 
 // Constructor
 ButtonEditComponent::ButtonEditComponent(ConfigManager& configManager, TranslationManager& translator)
@@ -355,13 +391,134 @@ void ButtonEditComponent::Draw() {
                     nfdresult_t resultIcon = NFD_OpenDialog(&outPathIcon, filt_icon, sizeof(filt_icon)/sizeof(nfdfilteritem_t), NULL);
 
                     if (resultIcon == NFD_OKAY) {
-                         std::cout << "[ButtonEditComponent] Icon selected: " << outPathIcon << std::endl;
-                         // Normalize to forward slashes before storing
-                         std::string selectedIconPathStr = outPathIcon;
-                         std::replace(selectedIconPathStr.begin(), selectedIconPathStr.end(), '\\', '/'); // <<< FIXED: Use single backslash char literal
-                         strncpy(m_newButtonIconPath, selectedIconPathStr.c_str(), sizeof(m_newButtonIconPath) - 1);
-                         m_newButtonIconPath[sizeof(m_newButtonIconPath) - 1] = '\0'; // Ensure null termination
-                         NFD_FreePath(outPathIcon); // IMPORTANT: Free the path returned by NFD
+                         // outPathIcon is char* (UTF-8)
+                         std::cout << "[ButtonEditComponent] Icon selected (absolute): " << outPathIcon << std::endl;
+                         bool path_set_successfully = false;
+                         try {
+                             #ifdef _WIN32
+                             // *** Convert UTF-8 from NFD to wstring ***
+                             std::wstring iconPathW = StringUtils::Utf8ToWide(outPathIcon);
+                             if (iconPathW.empty() && outPathIcon && outPathIcon[0] != '\0') {
+                                std::cerr << "[ButtonEditComponent] Failed to convert selected path to wstring." << std::endl;
+                             } else {
+                                 // *** Use the wstring (iconPathW) for filesystem ops ***
+                                 fs::path iconPathAbs = iconPathW;
+                                 std::wstring exeDirW = GetExecutableDirectoryW();
+                                 std::wstring targetSubDirW = L"assets/icons";
+
+                                 if (!exeDirW.empty()) {
+                                     fs::path exePath = exeDirW;
+                                     fs::path targetDirAbs = exePath / targetSubDirW;
+                                     fs::path iconFilename = iconPathAbs.filename();
+                                     fs::path destPathAbs = targetDirAbs / iconFilename;
+
+                                     // Ensure target directory exists
+                                     fs::create_directories(targetDirAbs);
+
+                                     bool already_in_target = false;
+                                     try {
+                                        already_in_target = fs::exists(destPathAbs) && fs::equivalent(iconPathAbs, destPathAbs);
+                                     } catch (const fs::filesystem_error& eq_err) {
+                                        std::cerr << "[ButtonEditComponent] Filesystem error during equivalent check: " << eq_err.what() << std::endl;
+                                        // Assume not equivalent if check fails
+                                     }
+
+                                     bool copy_needed = !already_in_target;
+                                     bool copy_successful = true; // Assume success if not needed
+
+                                     if (copy_needed) {
+                                         std::wcout << L"[ButtonEditComponent] Icon not in target directory, attempting copy to: " << destPathAbs.wstring() << std::endl;
+                                         try {
+                                            fs::copy_file(iconPathAbs, destPathAbs, fs::copy_options::overwrite_existing);
+                                            std::wcout << L"[ButtonEditComponent] Icon copy successful." << std::endl;
+                                         } catch (const fs::filesystem_error& copy_err) {
+                                            std::cerr << "[ButtonEditComponent] Filesystem error copying icon: " << copy_err.what() << std::endl;
+                                            copy_successful = false;
+                                         }
+                                     } else {
+                                         std::wcout << L"[ButtonEditComponent] Icon already in target directory: " << destPathAbs.wstring() << std::endl;
+                                     }
+
+                                     // Store the relative path ONLY if file is in target (original or copied)
+                                     if (already_in_target || copy_successful) {
+                                         std::wstring iconFilenameW = iconFilename.wstring();
+                                         std::wstring relativePathW = targetSubDirW + L"/" + iconFilenameW;
+                                         std::string relativePathStrUtf8 = StringUtils::WideToUtf8(relativePathW);
+
+                                         std::cout << "[ButtonEditComponent] Storing relative path: " << relativePathStrUtf8 << std::endl;
+                                         strncpy(m_newButtonIconPath, relativePathStrUtf8.c_str(), sizeof(m_newButtonIconPath) - 1);
+                                         m_newButtonIconPath[sizeof(m_newButtonIconPath) - 1] = '\0'; // Ensure null termination
+                                         path_set_successfully = true;
+                                     } else {
+                                          std::cerr << "[ButtonEditComponent] Failed to ensure icon file exists in target directory. Path not updated." << std::endl;
+                                     }
+
+                                 } else {
+                                     std::cerr << "[ButtonEditComponent] Could not get executable directory. Cannot process icon path." << std::endl;
+                                 }
+                             }
+                             #else
+                             // On non-Windows, assume NFD returns UTF-8 compatible with filesystem
+                             fs::path iconPathAbs = outPathIcon;
+                             std::string exeDir = GetExecutableDirectory();
+                             std::wstring targetSubDirW = L"assets/icons";
+                             fs::path exePath = exeDir;
+                             fs::path targetDirAbs = exePath / targetSubDirW;
+                             fs::path iconFilename = iconPathAbs.filename();
+                              
+                             // Ensure target directory exists
+                             fs::create_directories(targetDirAbs);
+
+                             bool already_in_target = false;
+                             try {
+                                already_in_target = fs::exists(destPathAbs) && fs::equivalent(iconPathAbs, destPathAbs);
+                             } catch (const fs::filesystem_error& eq_err) {
+                                std::cerr << "[ButtonEditComponent] Filesystem error during equivalent check: " << eq_err.what() << std::endl;
+                             }
+
+                             bool copy_needed = !already_in_target;
+                             bool copy_successful = true;
+
+                             if (copy_needed) {
+                                 std::cout << "[ButtonEditComponent] Icon not in target directory, attempting copy to: " << destPathAbs.string() << std::endl;
+                                 try {
+                                    fs::copy_file(iconPathAbs, destPathAbs, fs::copy_options::overwrite_existing);
+                                    std::cout << "[ButtonEditComponent] Icon copy successful." << std::endl;
+                                 } catch (const fs::filesystem_error& copy_err) {
+                                    std::cerr << "[ButtonEditComponent] Filesystem error copying icon: " << copy_err.what() << std::endl;
+                                    copy_successful = false;
+                                 }
+                             } else {
+                                 std::cout << "[ButtonEditComponent] Icon already in target directory: " << destPathAbs.string() << std::endl;
+                             }
+
+                             if (already_in_target || copy_successful) {
+                                 std::wstring iconFilenameW = iconFilename.wstring();
+                                 std::wstring relativePathW = targetSubDirW + L"/" + iconFilenameW;
+                                 std::string relativePathStrUtf8 = StringUtils::WideToUtf8(relativePathW);
+
+                                 std::cout << "[ButtonEditComponent] Storing relative path: " << relativePathStrUtf8 << std::endl;
+                                 strncpy(m_newButtonIconPath, relativePathStrUtf8.c_str(), sizeof(m_newButtonIconPath) - 1);
+                                 m_newButtonIconPath[sizeof(m_newButtonIconPath) - 1] = '\0';
+                                 path_set_successfully = true;
+                              } else {
+                                   std::cerr << "[ButtonEditComponent] Failed to ensure icon file exists in target directory. Path not updated." << std::endl;
+                              }
+                             #endif
+                         } catch (const fs::filesystem_error& e) {
+                            // Handle filesystem errors not caught by specific checks
+                            std::cerr << "[ButtonEditComponent] General filesystem error processing icon: " << e.what() << std::endl;
+                         } catch (const std::exception& e) {
+                             std::cerr << "[ButtonEditComponent] Error processing selected icon path: " << e.what() << std::endl;
+                         }
+
+                         // Free the original char* path
+                         if (outPathIcon) {
+                             NFD_FreePath(outPathIcon);
+                         }
+                         // Clear buffer if path setting failed, maybe?
+                         // if (!path_set_successfully) { m_newButtonIconPath[0] = '\0'; }
+
                     } else if (resultIcon == NFD_CANCEL) {
                         std::cout << "[ButtonEditComponent] Icon selection cancelled." << std::endl;
                     } else { // NFD_ERROR or unexpected
