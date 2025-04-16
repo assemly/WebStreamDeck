@@ -24,7 +24,7 @@
 
 // <<< MODIFIED: Constructor takes NetworkManager reference and initializes new window >>>
 UIManager::UIManager(ConfigManager& configManager, ActionRequestManager& actionRequestManager, TranslationManager& translationManager, NetworkManager& networkManager)
-      : m_buttonGridWindow(configManager, actionRequestManager, translationManager, *this),
+      : m_buttonGridWindow(configManager, actionRequestManager, translationManager, networkManager, *this),
       m_configWindow(*this, configManager, translationManager),
       m_statusLogWindow(translationManager),
       m_qrCodeWindow(translationManager),

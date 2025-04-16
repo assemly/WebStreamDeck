@@ -6,9 +6,11 @@
 
 GridCellComponent::GridCellComponent(ConfigManager& configManager,
                                      TranslationManager& translator,
+                                     NetworkManager& networkManager,
                                      std::map<std::string, GifLoader::AnimatedGif>& animatedGifTextures)
     : m_configManager(configManager),
       m_translator(translator),
+      m_networkManager(networkManager),
       m_animatedGifTextures(animatedGifTextures) // Store the reference
 {}
 
@@ -85,6 +87,7 @@ InteractionResult GridCellComponent::DrawEmptyCell(int page, int row, int col, c
                  result.page = page; // Add location to result
                  result.row = row;
                  result.col = col;
+                 m_networkManager.broadcastWebSocketState();
             } else {
                  std::cerr << " -> Failed to set button position via ConfigManager." << std::endl;
                   // Result remains NONE

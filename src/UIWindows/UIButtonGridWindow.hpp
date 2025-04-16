@@ -8,6 +8,7 @@
 #include "../Managers/ConfigManager.hpp"
 #include "../Managers/TranslationManager.hpp"
 #include "../Managers/ActionRequestManager.hpp"
+#include "../Managers/NetworkManager.hpp"
 #include "../Utils/GifLoader.hpp" // For AnimatedGif struct
 #include "../Utils/TextureLoader.hpp"
 #include "Components/GridPaginationComponent.hpp"
@@ -21,7 +22,7 @@ class TranslationManager; // Add this if TranslationManager.hpp isn't included
 
 class UIButtonGridWindow {
 public:
-    UIButtonGridWindow(ConfigManager& configManager, ActionRequestManager& actionRequestManager, TranslationManager& translationManager, UIManager& uiManager);
+    UIButtonGridWindow(ConfigManager& configManager, ActionRequestManager& actionRequestManager, TranslationManager& translationManager, NetworkManager& networkManager, UIManager& uiManager);
     ~UIButtonGridWindow(); // Destructor to manage resources if needed
 
     void Draw();
@@ -36,7 +37,7 @@ private:
     // <<< MODIFIED: Use non-namespaced type for member variable >>>
     TranslationManager& m_translator;
     UIManager& m_uiManager;
-
+    NetworkManager& m_networkManager;
     // Texture management moved here from UIManager for icons used in this window
     // std::map<std::string, GLuint> m_buttonIconTextures;
     std::map<std::string, GifLoader::AnimatedGif> m_animatedGifTextures;

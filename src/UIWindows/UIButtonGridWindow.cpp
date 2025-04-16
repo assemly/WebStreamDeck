@@ -1,13 +1,14 @@
 #include "UIButtonGridWindow.hpp"
 #include "../Managers/ActionRequestManager.hpp"
 #include "../Managers/UIManager.hpp"
+#include "../Managers/NetworkManager.hpp"
 #include "Components/ButtonSelectorPopupComponent.hpp"
 #include "Components/GridCellComponent.hpp"
 #include <iostream> // For std::cerr, std::cout
 #include <algorithm> // For std::transform and std::max
 
-UIButtonGridWindow::UIButtonGridWindow(ConfigManager& configManager, ActionRequestManager& actionRequestManager, TranslationManager& translationManager, UIManager& uiManager)
-    : m_configManager(configManager), m_actionRequestManager(actionRequestManager), m_translator(translationManager), m_uiManager(uiManager), m_paginationComponent(m_translator), m_buttonSelectorPopup(configManager, translationManager), m_gridCellComponent(configManager, translationManager, m_animatedGifTextures) {}
+UIButtonGridWindow::UIButtonGridWindow(ConfigManager& configManager, ActionRequestManager& actionRequestManager, TranslationManager& translationManager, NetworkManager& networkManager, UIManager& uiManager)
+    : m_configManager(configManager), m_actionRequestManager(actionRequestManager), m_translator(translationManager), m_networkManager(networkManager), m_uiManager(uiManager), m_paginationComponent(m_translator), m_buttonSelectorPopup(configManager, translationManager), m_gridCellComponent(configManager, translationManager, networkManager, m_animatedGifTextures) {}
 
 UIButtonGridWindow::~UIButtonGridWindow() {
     releaseAnimatedGifTextures();

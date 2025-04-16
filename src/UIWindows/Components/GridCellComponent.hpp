@@ -8,6 +8,7 @@
 #include "../../Managers/ConfigManager.hpp"     // Needs ButtonConfig definition
 #include "../../Managers/TranslationManager.hpp"
 #include "../../Utils/GifLoader.hpp"          // For AnimatedGif struct
+#include "../../Managers/NetworkManager.hpp"
 
 // Forward declarations if needed
 // class ConfigManager;
@@ -40,6 +41,7 @@ class GridCellComponent {
 public:
     GridCellComponent(ConfigManager& configManager,
                       TranslationManager& translator,
+                      NetworkManager& networkManager,
                       std::map<std::string, GifLoader::AnimatedGif>& animatedGifTextures); // Reference to the map
 
     // Draw a cell containing a button
@@ -52,6 +54,7 @@ private:
     // Dependencies
     ConfigManager& m_configManager;
     TranslationManager& m_translator;
+    NetworkManager& m_networkManager;
     std::map<std::string, GifLoader::AnimatedGif>& m_animatedGifTextures; // Store reference
 
     // Private helper methods (implementations moved from UIButtonGridWindow)
