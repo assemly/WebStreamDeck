@@ -9,62 +9,10 @@
 #include <vector>   // Ensure vector is included
 #include <string>   // Ensure string is included
 #include <map>      // Ensure map is included
-
-#ifdef _WIN32
-#include <windows.h> // Need this for MultiByteToWideChar
-#endif
+#include "../Utils/StringUtils.hpp"
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
-
-#ifdef _WIN32
-// Helper function to convert UTF-8 string to wstring (Windows specific)
-std::wstring Utf8ToWide(const std::string& utf8_str) {
-    if (utf8_str.empty()) {
-        return std::wstring();
-    }
-    // First, find the required buffer size
-    int required_size = MultiByteToWideChar(CP_UTF8, 0, utf8_str.c_str(), -1, NULL, 0);
-    if (required_size == 0) {
-        // Error handling: GetLastError() could provide more details
-        std::cerr << "Error: MultiByteToWideChar failed to get required size. Error code: " << GetLastError() << std::endl;
-        return std::wstring(); // Return empty string on error
-    }
-    // Allocate buffer and perform the conversion
-    std::wstring wide_str(required_size, 0);
-    int result = MultiByteToWideChar(CP_UTF8, 0, utf8_str.c_str(), -1, &wide_str[0], required_size);
-    if (result == 0) {
-        // Error handling
-        std::cerr << "Error: MultiByteToWideChar failed to convert string. Error code: " << GetLastError() << std::endl;
-        return std::wstring(); // Return empty string on error
-    }
-    // Remove the null terminator written by MultiByteToWideChar if size included it
-    if (!wide_str.empty() && wide_str.back() == L'\0') {
-         wide_str.pop_back();
-    }
-    return wide_str;
-}
-#else
-// Provide a stub or alternative implementation for non-Windows platforms if needed
-// For example, on Linux/macOS, std::filesystem often works directly with UTF-8
-std::wstring Utf8ToWide(const std::string& utf8_str) {
-    // Placeholder: On non-Windows, we might not need wstring conversion
-    // Or use a cross-platform library like ICU if complex conversion is needed
-    // For now, just return an empty wstring to avoid compilation errors elsewhere if used.
-    // A better approach would be to use #ifdefs where Utf8ToWide is called.
-    #warning "Utf8ToWide is not implemented for this platform. Filesystem path might handle UTF-8 directly." 
-    // This direct conversion might work on Linux/macOS with C++11 locale facets, but it's complex.
-    // std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-    // try {
-    //     return converter.from_bytes(utf8_str);
-    // } catch (const std::range_error& e) {
-    //     std::cerr << "Error converting UTF-8 to wide string: " << e.what() << std::endl;
-    //     return std::wstring();
-    // }
-    // Let's return empty for now to highlight the platform difference.
-    return std::wstring();
-}
-#endif
 
 // Helper to initialize the layout structure with default empty grids
 void ConfigManager::initializeLayoutPages(LayoutConfig& layout) {
@@ -697,30 +645,46 @@ bool ConfigManager::setLayoutDimensions(int newPageCount, int newRows, int newCo
     return true;
 }
 
-// <<< ADDED: Implementation for loading config from a specific file >>>
+// <<< MODIFIED: Original string version now delegates to the path version >>>
 bool ConfigManager::loadConfigFromFile(const std::string& filePath) {
-    std::cout << "[ConfigManager] Attempting to load preset configuration from: " << filePath << std::endl;
+    try {
+        return loadConfigFromFile(fs::path(filePath));
+    } catch (const fs::filesystem_error& e) {
+        std::cerr << "[ConfigManager] Filesystem error creating path from string: " << filePath << " Error: " << e.what() << std::endl;
+        return false;
+    } catch (const std::exception& e) {
+        std::cerr << "[ConfigManager] Error creating path from string: " << filePath << " Error: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+// <<< ADDED: Implementation for loading config from a std::filesystem::path >>>
+bool ConfigManager::loadConfigFromFile(const std::filesystem::path& filePath) {
+    std::string filePathStr = filePath.string(); // For logging
+    std::cout << "[ConfigManager] Attempting to load preset configuration from path: " << filePathStr << std::endl;
+
+    // Check existence using path object
     if (!fs::exists(filePath)) {
-         std::cerr << "[ConfigManager] Error: Preset file not found: " << filePath << std::endl;
+         std::cerr << "[ConfigManager] Error: Preset file not found: " << filePathStr << std::endl;
          return false;
     }
 
+    // Open ifstream using the path object
     std::ifstream presetFile(filePath);
     if (!presetFile.is_open()) {
-        std::cerr << "[ConfigManager] Error: Could not open preset file: " << filePath << std::endl;
+        std::cerr << "[ConfigManager] Error: Could not open preset file: " << filePathStr << std::endl;
         return false;
     }
 
+    // --- The rest of the parsing logic is identical to the original string version --- 
     try {
         json configJson;
         presetFile >> configJson;
         presetFile.close();
 
-        // Temporary storage for loaded data
         std::vector<ButtonConfig> tempButtons;
         LayoutConfig tempLayout;
 
-        // Load buttons
         if (configJson.contains("buttons") && configJson["buttons"].is_array()) {
             configJson.at("buttons").get_to(tempButtons);
         } else {
@@ -728,21 +692,16 @@ bool ConfigManager::loadConfigFromFile(const std::string& filePath) {
             tempButtons.clear(); 
         }
 
-        // Load layout
         if (configJson.contains("layout") && configJson["layout"].is_object()) {
             configJson.at("layout").get_to(tempLayout);
-            // Basic validation after loading preset layout
             if (tempLayout.page_count <= 0 || tempLayout.rows_per_page <= 0 || tempLayout.cols_per_page <= 0) {
                  std::cerr << "[ConfigManager] Warning: Preset file contains invalid layout dimensions. Resetting to default." << std::endl;
-                 tempLayout = {}; // Reset to default struct values
+                 tempLayout = {};
                  initializeLayoutPages(tempLayout);
             } else {
-                 // Ensure map consistency (similar to loadConfig)
                  if (tempLayout.pages.empty() || tempLayout.pages.size() != static_cast<size_t>(tempLayout.page_count)) {
                      std::cout << "[ConfigManager] Info: Preset layout pages map inconsistent. Re-initializing." << std::endl;
                      initializeLayoutPages(tempLayout);
-                 } else {
-                      // Optional: Further validation of row/col dimensions within map
                  }
             }
         } else {
@@ -751,31 +710,28 @@ bool ConfigManager::loadConfigFromFile(const std::string& filePath) {
             initializeLayoutPages(tempLayout);
         }
 
-        // --- Apply loaded data to ConfigManager --- 
         m_buttons = std::move(tempButtons);
         m_layout = std::move(tempLayout);
 
-        // <<< IMPORTANT: Overwrite the main config path and save >>>
-        // We assume loading a preset makes it the new main config.
-        // If you want presets to be temporary, skip saveConfig().
+        // Decide if loading a preset should overwrite the main config file.
+        // Current logic DOES overwrite. Remove saveConfig() call if presets should be temporary.
         std::cout << "[ConfigManager] Preset loaded successfully. Saving as current configuration..." << std::endl;
-        if (!saveConfig()) {
+        if (!saveConfig()) { // saveConfig() uses m_configFilePath (string)
             std::cerr << "[ConfigManager] Error: Failed to save the loaded preset to the main config file: " << m_configFilePath << std::endl;
-            // State is already updated in memory, but save failed.
-            return false; // Indicate save failure, though load succeeded.
+            return false; 
         }
 
         std::cout << "[ConfigManager] Preset loaded and saved as current config." << std::endl;
-        return true; // Load and save successful
+        return true;
 
     } catch (json::parse_error& e) {
-        std::cerr << "[ConfigManager] Error parsing preset file: " << filePath << "\nMessage: " << e.what() << std::endl;
+        std::cerr << "[ConfigManager] Error parsing preset file: " << filePathStr << "\nMessage: " << e.what() << std::endl;
         return false;
     } catch (json::exception& e) {
-        std::cerr << "[ConfigManager] Error processing JSON in preset file " << filePath << ": " << e.what() << std::endl;
+        std::cerr << "[ConfigManager] Error processing JSON in preset file " << filePathStr << ": " << e.what() << std::endl;
         return false;
     } catch (const std::exception& e) {
-        std::cerr << "[ConfigManager] An unknown error occurred while loading the preset file " << filePath << ": " << e.what() << std::endl;
+        std::cerr << "[ConfigManager] An unknown error occurred while loading the preset file " << filePathStr << ": " << e.what() << std::endl;
         return false;
     }
 }
@@ -797,7 +753,7 @@ bool ConfigManager::saveConfigToPreset(const std::string& presetName) {
     // Convert presetName (UTF-8) to wstring for path construction (Windows)
     // <<< MODIFIED: Convert to wstring before building path >>>
     #ifdef _WIN32
-    std::wstring presetNameWide = Utf8ToWide(presetName);
+    std::wstring presetNameWide = StringUtils::Utf8ToWide(presetName);
     if (presetNameWide.empty() && !presetName.empty()) { // Check if conversion failed
          std::cerr << "[ConfigManager] Error: Failed to convert preset name to wide string for path construction." << std::endl;
          return false;

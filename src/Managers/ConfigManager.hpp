@@ -6,6 +6,7 @@
 #include <map>
 #include <tuple>
 #include <nlohmann/json.hpp>
+#include <filesystem>
 
 // Define structure for a single button configuration
 struct ButtonConfig {
@@ -44,6 +45,8 @@ public:
 
     // <<< ADDED: Load configuration from a specific file path >>>
     bool loadConfigFromFile(const std::string& filePath);
+    // <<< ADDED: Overload to accept std::filesystem::path (preferred) >>>
+    bool loadConfigFromFile(const std::filesystem::path& filePath);
 
     // <<< ADDED: Save current configuration to a new preset file >>>
     bool saveConfigToPreset(const std::string& presetName);

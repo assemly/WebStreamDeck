@@ -51,6 +51,7 @@ add_executable(${PROJECT_NAME}
     src/Utils/GifLoader.cpp
     src/Utils/NetworkUtils.cpp
     src/Utils/TextureLoader.cpp
+    src/Utils/StringUtils.cpp
     src/Services/ActionExecutionService.cpp
     src/Services/HttpServer.cpp
     src/Services/WebSocketServer.cpp
@@ -59,11 +60,17 @@ add_executable(${PROJECT_NAME}
     src/Managers/ActionRequestManager.cpp
     src/Managers/NetworkManager.cpp
     src/Managers/TranslationManager.cpp
+    
+    src/UIWindows/Components/PresetManagerComponent.cpp
+    src/UIWindows/Components/ButtonListComponent.cpp
+    src/UIWindows/Components/ButtonEditComponent.cpp
+
     src/UIWindows/UIButtonGridWindow.cpp
     src/UIWindows/UIConfigurationWindow.cpp
     src/UIWindows/UIStatusLogWindow.cpp
     src/UIWindows/UIQrCodeWindow.cpp
     src/UIWindows/UILayoutSettingsWindow.cpp
+
     src/main.cpp
 )
 
