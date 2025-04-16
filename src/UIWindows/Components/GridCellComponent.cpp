@@ -56,35 +56,88 @@ InteractionResult GridCellComponent::DrawButtonCell(const ButtonConfig& button, 
 }
 
 InteractionResult GridCellComponent::DrawEmptyCell(int page, int row, int col, const ImVec2& buttonSizeVec) {
-    InteractionResult finalResult{ CellInteractionType::NONE };
-    finalResult.page = page; // Pre-fill location
-    finalResult.row = row;
-    finalResult.col = col;
+    InteractionResult result{ CellInteractionType::NONE };
+    std::string label = "+";
+    std::string idStr = "empty_" + std::to_string(page) + "_" + std::to_string(row) + "_" + std::to_string(col);
+    ImGui::PushID(idStr.c_str());
 
-    std::string cellPayloadId = "empty_" + std::to_string(page) + "_" + std::to_string(row) + "_" + std::to_string(col);
-    ImGui::PushID(cellPayloadId.c_str());
+    // Invisible button covers the whole cell area for interaction
+    // Make it slightly smaller than buttonSizeVec if needed for visual separation
+    ImGui::InvisibleButton("##invisible_empty", buttonSizeVec);
 
-    // Draw simple placeholder or just use InvisibleButton
-    ImGui::InvisibleButton("empty_cell_btn", buttonSizeVec); // Unique label
-    // Optional: Draw a subtle background for empty cells
-    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    // --- Allow dropping buttons from the list AND from the grid itself --- 
+    if (ImGui::BeginDragDropTarget()) {
+        // 1. Try to accept a button being dragged from the list
+        const ImGuiPayload* listPayload = ImGui::AcceptDragDropPayload("BUTTON_LIST_ITEM");
+        if (listPayload) {
+            IM_ASSERT(listPayload->DataSize > 0);
+            const char* droppedButtonIdCStr = (const char*)listPayload->Data;
+            std::string droppedButtonId(droppedButtonIdCStr, listPayload->DataSize -1); // Correctly handle size
+
+            std::cout << "[GridCellComponent] Accepted drop from BUTTON_LIST_ITEM: " << droppedButtonId << " onto [" << page << "," << row << "," << col << "]" << std::endl;
+            
+            // Perform the placement directly using ConfigManager
+            if (m_configManager.setButtonPosition(droppedButtonId, page, row, col)) {
+                 std::cout << " -> Position set successfully." << std::endl;
+                 result.type = CellInteractionType::DND_COMPLETE;
+                 result.layoutChangedByDnd = true;
+                 result.buttonId = droppedButtonId; // Add buttonId to result
+                 result.page = page; // Add location to result
+                 result.row = row;
+                 result.col = col;
+            } else {
+                 std::cerr << " -> Failed to set button position via ConfigManager." << std::endl;
+                  // Result remains NONE
+            }
+        }
+
+        // 2. Try to accept a button being dragged from another grid cell (move)
+        const ImGuiPayload* gridPayload = ImGui::AcceptDragDropPayload("BUTTON_GRID_ITEM");
+        if (gridPayload) {
+             IM_ASSERT(gridPayload->DataSize > 0);
+             const char* droppedButtonIdCStr = (const char*)gridPayload->Data;
+             std::string droppedButtonId(droppedButtonIdCStr, gridPayload->DataSize -1); // Correctly handle size
+
+             std::cout << "[GridCellComponent] Accepted drop from BUTTON_GRID_ITEM: " << droppedButtonId << " onto [" << page << "," << row << "," << col << "]" << std::endl;
+
+             // Perform the move directly using ConfigManager
+             if (m_configManager.setButtonPosition(droppedButtonId, page, row, col)) {
+                 std::cout << " -> Position set successfully." << std::endl;
+                 result.type = CellInteractionType::DND_COMPLETE;
+                 result.layoutChangedByDnd = true;
+                 result.buttonId = droppedButtonId; // Add buttonId to result
+                 result.page = page; // Add location to result
+                 result.row = row;
+                 result.col = col;
+             } else {
+                 std::cerr << " -> Failed to set button position via ConfigManager." << std::endl;
+                 // Result remains NONE
+             }
+        }
+        ImGui::EndDragDropTarget();
+    }
+    // --- End Drop Target Handling ---
+
+    // Draw the visual representation (+) centered on the invisible button area
     ImVec2 p_min = ImGui::GetItemRectMin();
     ImVec2 p_max = ImGui::GetItemRectMax();
-    drawList->AddRectFilled(p_min, p_max, ImColor(40, 40, 40, 150), 4.0f); // Darker, semi-transparent
+    ImVec2 center = ImVec2((p_min.x + p_max.x) * 0.5f, (p_min.y + p_max.y) * 0.5f);
+    ImVec2 textSize = ImGui::CalcTextSize(label.c_str());
+    ImGui::GetWindowDrawList()->AddText(ImVec2(center.x - textSize.x * 0.5f, center.y - textSize.y * 0.5f), 
+                                        ImGui::GetColorU32(ImGuiCol_TextDisabled), label.c_str());
 
-    // Handle Drop Target and Context Menu
-    InteractionResult dropResult = HandleEmptyCellDropTarget(page, row, col);
+    // --- Handle Right-Click Context Menu --- (Keep this functionality)
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Right) || (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right, true))) {
+         // We handle the opening of the popup in the HandleEmptyCellContextMenu helper now
+    }
+    // Call the context menu handler, it will check if the item was right-clicked
     InteractionResult contextResult = HandleEmptyCellContextMenu(page, row, col);
-
-    // Prioritize DND over Context Menu for empty cells
-    if (dropResult.type != CellInteractionType::NONE) {
-        finalResult = dropResult; // Already contains page, row, col
-    } else if (contextResult.type != CellInteractionType::NONE) {
-        finalResult = contextResult; // Already contains page, row, col
+    if (contextResult.type != CellInteractionType::NONE) {
+        result = contextResult; // Context menu action takes precedence if triggered
     }
 
     ImGui::PopID();
-    return finalResult;
+    return result;
 }
 
 // --- Private Helper Methods ---

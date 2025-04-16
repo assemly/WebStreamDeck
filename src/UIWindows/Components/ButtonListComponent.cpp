@@ -122,6 +122,8 @@ void ButtonListComponent::Draw() {
             ImGui::TextUnformatted(m_translator.get("no_buttons_loaded").c_str());
             ImGui::TextDisabled(m_translator.get("drag_drop_hint_text").c_str()); // Keep hint
         } else {
+            const char* dragDropPayloadType = "BUTTON_LIST_ITEM"; // Define payload type
+
             if (ImGui::BeginTable("buttons_list_table", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
                 ImGui::TableSetupColumn("ID");
                 ImGui::TableSetupColumn("Name");
@@ -131,11 +133,28 @@ void ButtonListComponent::Draw() {
                 for (const auto& button : buttons) {
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("%s", button.id.c_str());
+                    
+                    // --- Make Button ID Draggable --- 
+                    ImGui::PushID(button.id.c_str()); // Use ID for unique drag source ID as well
+                    // Wrap the selectable text (or just text) with BeginDragDropSource
+                    // Using Selectable allows for highlighting on hover, Text is simpler
+                    ImGui::Selectable(button.id.c_str(), false, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap, ImVec2(0, 0)); // Make it span but don't react to selection
+                    
+                    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+                        // Set payload to carry the button ID
+                        ImGui::SetDragDropPayload(dragDropPayloadType, button.id.c_str(), (button.id.length() + 1) * sizeof(char));
+                        
+                        // Display preview tooltip while dragging
+                        ImGui::Text("%s: %s", m_translator.get("dnd_dragging_button_prefix").c_str(), button.name.c_str()); 
+                        ImGui::EndDragDropSource();
+                    }
+                    ImGui::PopID(); // Pop ID used for drag source
+                    // --- End Draggable --- 
+
                     ImGui::TableSetColumnIndex(1);
-                    ImGui::Text("%s", button.name.c_str());
+                    ImGui::Text("%s", button.name.c_str()); // Keep name display simple
                     ImGui::TableSetColumnIndex(2);
-                    ImGui::PushID(button.id.c_str()); // Push ID for button uniqueness
+                    ImGui::PushID(button.id.c_str()); // Separate PushID for buttons in the Actions column
 
                     // Edit Button
                     if (ImGui::SmallButton(m_translator.get("edit_button_label").c_str())) {
@@ -150,7 +169,7 @@ void ButtonListComponent::Draw() {
                         m_buttonIdToDelete = button.id;
                         m_showDeleteConfirmation = true; // Trigger the modal popup
                     }
-                    ImGui::PopID(); // Pop ID
+                    ImGui::PopID(); // Pop ID for action buttons
                 }
                 ImGui::EndTable();
             }
