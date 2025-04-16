@@ -52,6 +52,8 @@ add_executable(${PROJECT_NAME}
     src/Utils/NetworkUtils.cpp
     src/Utils/TextureLoader.cpp
     src/Utils/StringUtils.cpp
+    src/Utils/IconUtils.cpp
+    
     src/Services/ActionExecutionService.cpp
     src/Services/HttpServer.cpp
     src/Services/WebSocketServer.cpp

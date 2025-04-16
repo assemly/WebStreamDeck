@@ -3,7 +3,8 @@
 #include <imgui.h>
 #include <iostream> // For logging
 #include <cstring>  // For strncpy, memset
-#include <algorithm> // For std::find
+#include <algorithm> // For std::find, std::replace, std::string conversion
+#include <string>    // For std::string
 
 // Constructor
 ButtonEditComponent::ButtonEditComponent(ConfigManager& configManager, TranslationManager& translator)
@@ -75,7 +76,7 @@ void ButtonEditComponent::StartAddNewPrefilled(const PrefilledButtonData& data) 
 
 // Helper to clear the form fields and exit edit mode
 void ButtonEditComponent::ClearForm() {
-    m_newButtonId[0] = '\\0';
+    memset(m_newButtonId, 0, sizeof(m_newButtonId));
     memset(m_newButtonName, 0, sizeof(m_newButtonName));
     m_newButtonActionTypeIndex = -1; // Reset combo box selection
     memset(m_newButtonActionParam, 0, sizeof(m_newButtonActionParam));
@@ -171,8 +172,11 @@ void ButtonEditComponent::SubmitForm() {
         }
     }
 
-    // Attempt to save config if changes were made by add/update
+    // If add/update was successful, clear the form immediately
     if (configChanged) {
+        ClearForm();
+
+        // Attempt to save config
         if (m_configManager.saveConfig()) {
             std::cout << "[ButtonEditComponent] Configuration saved successfully." << std::endl;
             saveSuccess = true;
@@ -181,11 +185,7 @@ void ButtonEditComponent::SubmitForm() {
         }
     }
 
-    // If add/update and save were successful, clear the form
-    if (configChanged && saveSuccess) {
-        ClearForm(); // Also exits edit mode if was editing
-    }
-    // If only configChanged was true but save failed, the form retains data for user to retry? Or clear? Currently retains.
+    // Form is now cleared if configChanged was true, regardless of saveSuccess.
 }
 
 
@@ -310,11 +310,28 @@ void ButtonEditComponent::Draw() {
                      m_isCapturingHotkey = false;
                      float browseButtonWidth = 0.0f;
                      if (isLaunchAppAction) {
-                         browseButtonWidth = ImGui::CalcTextSize("...").x + ImGui::GetStyle().ItemSpacing.x * 2.0f; // Use "..." like icon browse
+                         browseButtonWidth = ImGui::CalcTextSize("...").x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
                      }
                      float inputWidth = ImGui::GetContentRegionAvail().x - browseButtonWidth;
                      ImGui::PushItemWidth(inputWidth > 0 ? inputWidth : -FLT_MIN);
+                     
+                     // <<< REVERTED: Directly use m_newButtonActionParam >>>
+                     /* char displayBuffer[sizeof(m_newButtonActionParam)];
+                     strncpy(displayBuffer, m_newButtonActionParam, sizeof(displayBuffer) - 1);
+                     displayBuffer[sizeof(displayBuffer) - 1] = '\0'; 
+                     for (char* p = displayBuffer; *p != '\0'; ++p) {
+                         if (*p == '\\') { *p = '/'; } // Display / instead of \
+                     }*/
+                     // Use the original buffer directly
                      ImGui::InputText("##ActionParamInputOther_EditComp", m_newButtonActionParam, sizeof(m_newButtonActionParam));
+                     /* if (edited) { // No need to convert back if using original buffer directly
+                         std::string editedStr = displayBuffer;
+                         std::replace(editedStr.begin(), editedStr.end(), '/', '\\');
+                         strncpy(m_newButtonActionParam, editedStr.c_str(), sizeof(m_newButtonActionParam) - 1);
+                         m_newButtonActionParam[sizeof(m_newButtonActionParam) - 1] = '\0'; 
+                     }*/
+                     // <<< END REVERTED >>>
+
                      ImGui::PopItemWidth();
                      if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("action_param_tooltip").c_str()); }
 
@@ -343,7 +360,31 @@ void ButtonEditComponent::Draw() {
                 float browseButtonWidth = ImGui::CalcTextSize("...").x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
                 float inputWidth = ImGui::GetContentRegionAvail().x - browseButtonWidth;
                 ImGui::PushItemWidth(inputWidth > 0 ? inputWidth : -FLT_MIN);
-                ImGui::InputText("##IconPath_EditComp", m_newButtonIconPath, sizeof(m_newButtonIconPath));
+                
+                // <<< ADDED: Normalize icon path slashes for display >>>
+                char displayBufferIcon[sizeof(m_newButtonIconPath)];
+                strncpy(displayBufferIcon, m_newButtonIconPath, sizeof(displayBufferIcon) - 1);
+                displayBufferIcon[sizeof(displayBufferIcon) - 1] = '\0'; // Ensure null termination
+                
+                // Replace forward slashes with backslashes for display
+                for (char* p = displayBufferIcon; *p != '\0'; ++p) {
+                    if (*p == '/') {
+                        *p = '\\'; // Display 
+                    }   
+                }
+                
+                // Use the display buffer in InputText
+                bool iconEdited = ImGui::InputText("##IconPath_EditComp", displayBufferIcon, sizeof(displayBufferIcon));
+                
+                // If edited, normalize back to forward slashes and save to original buffer
+                if (iconEdited) {
+                    std::string editedIconStr = displayBufferIcon;
+                    std::replace(editedIconStr.begin(), editedIconStr.end(), '\\', '/'); // Normalize back to forward slashes
+                    strncpy(m_newButtonIconPath, editedIconStr.c_str(), sizeof(m_newButtonIconPath) - 1);
+                    m_newButtonIconPath[sizeof(m_newButtonIconPath) - 1] = '\0'; // Ensure null termination
+                }
+                // <<< END ADDED >>>
+
                 ImGui::PopItemWidth();
                 ImGui::SameLine();
                 if (ImGui::Button("...##IconBrowse_EditComp")) {
@@ -383,4 +424,5 @@ void ButtonEditComponent::Draw() {
     HandleFileDialog();
 
     ImGui::PopID();
+    
 }

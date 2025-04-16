@@ -9,6 +9,7 @@
 #include <vector>
 #include <iomanip> // For std::hex
 #include <sstream> // For std::wstringstream
+#include "../../Utils/IconUtils.hpp" // <<< ADDED: Include IconUtils
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -138,7 +139,7 @@ void ButtonListComponent::ProcessDroppedFiles(const std::string>& files) {
 }
 #endif
 
-// <<< The existing private ProcessDroppedFile helper remains unchanged >>>
+// <<< Modify the private ProcessDroppedFile helper >>>
 #ifdef _WIN32
 void ButtonListComponent::ProcessDroppedFile(const std::wstring& filePathW) {
     std::cout << "[ButtonList DEBUG] Processing wstring path: " << WideToUtf8(filePathW) << std::endl;
@@ -152,10 +153,8 @@ void ButtonListComponent::ProcessDroppedFile(const std::wstring& filePathW) {
     }
 
     try {
-        // Use wstring directly with filesystem path on Windows
         fs::path p(filePathW);
         if (!fs::exists(p)) {
-            // Convert wstring to UTF-8 for logging if needed
             std::cerr << "[ButtonList] Dropped file does not exist (reported by fs::exists): " << WideToUtf8(filePathW) << std::endl;
             return;
         }
@@ -171,29 +170,58 @@ void ButtonListComponent::ProcessDroppedFile(const std::wstring& filePathW) {
         std::replace_if(data.suggested_id.begin(), data.suggested_id.end(), [](char c){ return !std::isalnum(c) && c != '_'; }, '_');
         data.suggested_name = stem;
 
-        // --- Action Type Detection --- (Remains mostly the same logic, using std::string extension)
-        std::string actionParamUtf8 = WideToUtf8(filePathW); // Convert full path to UTF-8 for storage
+        // --- Action Type Detection ---
+        std::string actionParamUtf8 = WideToUtf8(filePathW);
 
         if (extension == ".exe" || extension == ".bat" || extension == ".sh" || extension == ".app") {
             data.action_type = "launch_app";
             data.action_param = actionParamUtf8; 
+
+            // <<< ADDED: Attempt to extract icon for .exe >>>
+            if (extension == ".exe") {
+                std::string outputDir = "assets/icons";
+                auto extractedIconPathOpt = IconUtils::ExtractAndSaveIconPng(filePathW, outputDir, stem);
+                if (extractedIconPathOpt) {
+                    data.suggested_icon_path = *extractedIconPathOpt;
+                     std::cout << "[ButtonList] Successfully extracted and set icon path: " << data.suggested_icon_path << std::endl;
+                } else {
+                    std::cerr << "[ButtonList] Failed to extract icon for " << actionParamUtf8 << std::endl;
+                    // Keep suggested_icon_path empty or default
+                }
+            }
+            // <<< END ADDED >>>
+
         } else if (extension == ".url") {
             data.action_type = "open_url";
             data.action_param = ""; // Placeholder
             std::cerr << "[ButtonList] .url parsing not implemented yet." << std::endl;
         } else if (extension == ".lnk") {
             data.action_type = "launch_app";
-            data.action_param = actionParamUtf8; // Placeholder - should be target path
-            std::cerr << "[ButtonList] .lnk parsing not implemented yet." << std::endl;
+            data.action_param = actionParamUtf8; 
+            // <<< MODIFIED: Use original stem for LNK placeholder too >>>
+            std::cerr << "[ButtonList] .lnk file icon extraction via IconUtils not implemented yet." << std::endl;
+            /* // Example of future LNK handling:
+            std::string outputDir = "assets/icons";
+            auto extractedIconPathOpt = IconUtils::ExtractAndSaveIconPng(filePathW, outputDir, stem);
+            if (extractedIconPathOpt) {
+                data.suggested_icon_path = *extractedIconPathOpt;
+                 std::cout << "[ButtonList] Successfully extracted and set icon path from LNK: " << data.suggested_icon_path << std::endl;
+            } else {
+                 std::cerr << "[ButtonList] Failed to extract icon for LNK " << actionParamUtf8 << std::endl;
+            }
+            */
+            // <<< END ADDED >>>
         } else {
             std::cout << "[ButtonList] Dropped file type '" << extension << "' not recognized for automatic action." << std::endl;
             data.action_type = "launch_app";
             data.action_param = actionParamUtf8;
         }
 
-        // --- Icon Path --- (Convert potential path to UTF-8)
-        if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".bmp" || extension == ".gif") {
-             data.suggested_icon_path = actionParamUtf8; // Use the UTF-8 path
+        // --- Icon Path (Only set if not already set by extractor) ---
+        if (data.suggested_icon_path.empty() && 
+            (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".bmp" || extension == ".gif")) 
+        {
+             data.suggested_icon_path = actionParamUtf8; 
         }
 
         // Trigger callback
