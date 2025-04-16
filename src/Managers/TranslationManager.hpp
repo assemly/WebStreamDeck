@@ -9,8 +9,11 @@ using json = nlohmann::json;
 
 class TranslationManager {
 public:
-    // Constructor, loads default language
+    // Constructor: Only stores paths and default language
     explicit TranslationManager(const std::string& langFolderPath = "assets/lang", const std::string& defaultLang = "zh");
+
+    // New method to perform the actual loading and detection
+    bool Initialize();
 
     // Get translated string for a given key
     const std::string& get(const std::string& key);
@@ -27,7 +30,8 @@ public:
 
 private:
     std::string m_langFolderPath;
-    std::string m_currentLanguage;
+    std::string m_defaultLanguage; // Store the intended default language
+    std::string m_currentLanguage; // Will be set during Initialize
     json m_translations; // Current loaded translations
     std::string m_fallbackString = "???"; // String to return if key not found
     std::map<std::string, std::string> m_cachedStrings; // Cache for retrieved strings to return const ref

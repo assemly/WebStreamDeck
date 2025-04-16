@@ -89,5 +89,8 @@
     "refresh_list_button": "刷新列表",
     "save_preset_label": "另存为预设：",
     "save_as_button": "另存为",
-    "dnd_dragging_button_prefix": "拖动中"
+    "dnd_dragging_button_prefix": "拖动中",
+    "settings_header": "设置",
+    "setting_start_on_boot": "开机启动",
+    "setting_start_minimized": "启动时最小化到托盘"
 }

@@ -1,8 +1,106 @@
 #include "UIStatusLogWindow.hpp"
 #include <iostream> // For std::cout, std::cerr
+#include <fstream>  // For file I/O
+#include <string>   // For std::string manipulation
+#include <vector>   // Used indirectly by windows.h potentially
+#include <locale>   // For string conversions
+#include <codecvt>  // For string conversions
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h> // Include Windows header for Registry functions
+#endif
+
+// Helper function to trim whitespace from a string (needed for parsing)
+std::string trim(const std::string& str)
+{
+    size_t first = str.find_first_not_of(' ');
+    if (std::string::npos == first) {
+        return str;
+    }
+    size_t last = str.find_last_not_of(' ');
+    return str.substr(first, (last - first + 1));
+}
+
+#ifdef _WIN32
+// Helper function to convert UTF-8 std::string to std::wstring
+std::wstring utf8_to_wstring(const std::string& str) {
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    return converter.from_bytes(str);
+}
+
+// Helper function to convert std::wstring to UTF-8 std::string
+std::string wstring_to_utf8(const std::wstring& wstr) {
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    return converter.to_bytes(wstr);
+}
+
+// --- Windows Registry Startup Functions ---
+const wchar_t* StartupRegistryKey = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run";
+
+// Function to add the application to Windows startup
+bool RegisterForStartup(const std::wstring& appName, const std::wstring& appPath) {
+    HKEY hKey = NULL;
+    // Quote the path in case it contains spaces
+    std::wstring quotedPath = L"\"" + appPath + L"\"";
+
+    // Open the Run key
+    LONG lResult = RegOpenKeyExW(HKEY_CURRENT_USER, StartupRegistryKey, 0, KEY_WRITE, &hKey);
+    if (lResult != ERROR_SUCCESS) {
+        std::cerr << "Error: Could not open registry key HKEY_CURRENT_USER\\" << wstring_to_utf8(StartupRegistryKey) << " for writing. Error code: " << lResult << std::endl;
+        return false;
+    }
+
+    // Set the value (application name = path to executable)
+    lResult = RegSetValueExW(hKey, appName.c_str(), 0, REG_SZ,
+                             (const BYTE*)quotedPath.c_str(),
+                             (quotedPath.length() + 1) * sizeof(wchar_t)); // +1 for null terminator
+
+    RegCloseKey(hKey);
+
+    if (lResult != ERROR_SUCCESS) {
+        std::cerr << "Error: Could not set registry value '" << wstring_to_utf8(appName) << "'. Error code: " << lResult << std::endl;
+        return false;
+    }
+
+    std::cout << "Successfully registered '" << wstring_to_utf8(appName) << "' for startup." << std::endl;
+    return true;
+}
+
+// Function to remove the application from Windows startup
+bool UnregisterFromStartup(const std::wstring& appName) {
+    HKEY hKey = NULL;
+
+    // Open the Run key
+    LONG lResult = RegOpenKeyExW(HKEY_CURRENT_USER, StartupRegistryKey, 0, KEY_WRITE, &hKey);
+    if (lResult != ERROR_SUCCESS) {
+        std::cerr << "Error: Could not open registry key HKEY_CURRENT_USER\\" << wstring_to_utf8(StartupRegistryKey) << " for writing. Error code: " << lResult << std::endl;
+        return false;
+    }
+
+    // Delete the value
+    lResult = RegDeleteValueW(hKey, appName.c_str());
+    RegCloseKey(hKey);
+
+    if (lResult != ERROR_SUCCESS && lResult != ERROR_FILE_NOT_FOUND) { // Ignore if value already doesn't exist
+        std::cerr << "Error: Could not delete registry value '" << wstring_to_utf8(appName) << "'. Error code: " << lResult << std::endl;
+        return false;
+    }
+
+     if (lResult == ERROR_FILE_NOT_FOUND) {
+         std::cout << "Startup registry value '" << wstring_to_utf8(appName) << "' not found (already unregistered?)." << std::endl;
+     } else {
+         std::cout << "Successfully unregistered '" << wstring_to_utf8(appName) << "' from startup." << std::endl;
+     }
+    return true;
+}
+
+#endif // _WIN32
 
 UIStatusLogWindow::UIStatusLogWindow(TranslationManager& translationManager)
-    : m_translator(translationManager) {
+    : m_translator(translationManager) { // m_startOnBoot is initialized by LoadConfig now
+    LoadConfig(); // Load settings on construction
+
     // Initialize language index based on current translator language
     const auto& availableLangs = m_translator.getAvailableLanguages();
     const std::string& currentLang = m_translator.getCurrentLanguage();
@@ -96,5 +194,125 @@ void UIStatusLogWindow::Draw(bool isServerRunning, int serverPort, const std::st
     }
     ImGui::PopItemWidth();
 
+    ImGui::Separator(); // Add a separator before the new setting
+
+    // --- Settings Section ---
+    ImGui::TextUnformatted(m_translator.get("settings_header").c_str());
+
+    if (ImGui::Checkbox(m_translator.get("setting_start_on_boot").c_str(), &m_startOnBoot)) {
+        std::cout << "Start on boot setting changed to: " << (m_startOnBoot ? "true" : "false") << std::endl;
+
+        SaveConfig(); // Save settings when changed
+
+        // --- Actual System Integration --- 
+#ifdef _WIN32
+        wchar_t pathBuffer[MAX_PATH];
+        std::wstring executablePath = L""; // Initialize empty
+        DWORD pathLen = GetModuleFileNameW(NULL, pathBuffer, MAX_PATH);
+
+        if (pathLen == 0) {
+             std::cerr << "Error: GetModuleFileNameW failed. Error code: " << GetLastError() << std::endl;
+        } else if (pathLen == MAX_PATH) {
+            std::cerr << "Error: Executable path exceeds MAX_PATH length." << std::endl;
+        } else {
+            executablePath = pathBuffer;
+        }
+
+        // Only proceed if we successfully got the path
+        if (!executablePath.empty()) {
+             std::wstring appName = L"WebStreamDeck"; // Name for the registry entry
+
+             bool success = false;
+             if (m_startOnBoot) {
+                 success = RegisterForStartup(appName, executablePath);
+             } else {
+                 success = UnregisterFromStartup(appName);
+             }
+
+             if (!success) {
+                 std::cerr << "Warning: Failed to update Windows startup settings. Please check permissions or run as administrator if needed." << std::endl;
+                 // Optional: Revert the checkbox state if registry update failed?
+                 // m_startOnBoot = !m_startOnBoot;
+                 // SaveConfig(); // Save the reverted state
+             }
+        } else {
+            std::cerr << "Error: Cannot update startup settings because executable path could not be determined." << std::endl;
+             // Revert the checkbox state as we couldn't perform the action
+             m_startOnBoot = !m_startOnBoot;
+             SaveConfig(); // Save the reverted state
+        }
+#else
+        std::cout << "Warning: Start on boot configuration is only implemented for Windows currently." << std::endl;
+#endif
+    }
+
+    if (ImGui::Checkbox(m_translator.get("setting_start_minimized").c_str(), &m_startMinimized)) {
+        std::cout << "Start Minimized setting changed to: " << (m_startMinimized ? "true" : "false") << std::endl;
+        SaveConfig();
+    }
+
     ImGui::End();
+}
+
+// --- Configuration Loading/Saving Implementation ---
+
+void UIStatusLogWindow::LoadConfig() {
+    m_startOnBoot = false; // Default value
+    m_startMinimized = false; // Default value for new setting
+    std::ifstream configFile(m_configFilePath);
+
+    if (!configFile.is_open()) {
+        std::cerr << "Info: Could not open config file '" << m_configFilePath << "'. Attempting to create with default settings." << std::endl;
+        SaveConfig(); 
+        return; 
+    }
+
+    std::string line;
+    bool foundStartOnBoot = false;
+    bool foundStartMinimized = false;
+    while (std::getline(configFile, line)) {
+        line = trim(line);
+        if (line.empty() || line[0] == '#' || line[0] == ';') { continue; }
+
+        size_t separatorPos = line.find('=');
+        if (separatorPos != std::string::npos) {
+            std::string key = trim(line.substr(0, separatorPos));
+            std::string value = trim(line.substr(separatorPos + 1));
+
+            if (!foundStartOnBoot && key == "startOnBoot") {
+                m_startOnBoot = (value == "true" || value == "1");
+                foundStartOnBoot = true;
+            } else if (!foundStartMinimized && key == "startMinimized") {
+                m_startMinimized = (value == "true" || value == "1");
+                foundStartMinimized = true;
+            }
+            
+            if (foundStartOnBoot && foundStartMinimized) break; 
+        }
+    }
+    configFile.close();
+    std::cout << "Loaded config: startOnBoot = " << (m_startOnBoot ? "true" : "false") 
+              << ", startMinimized = " << (m_startMinimized ? "true" : "false") << std::endl;
+}
+
+void UIStatusLogWindow::SaveConfig() {
+    std::ofstream configFile(m_configFilePath); // Opens for writing
+
+    if (!configFile.is_open()) {
+        std::cerr << "Error: Could not open config file '" << m_configFilePath << "' for writing." << std::endl;
+        return;
+    }
+
+    configFile << "# System Configuration" << std::endl;
+    configFile << "startOnBoot=" << (m_startOnBoot ? "true" : "false") << std::endl;
+    configFile << "startMinimized=" << (m_startMinimized ? "true" : "false") << std::endl;
+
+    configFile.close();
+
+    if (!configFile) { 
+         std::cerr << "Error: Failed to write to config file '" << m_configFilePath << "'." << std::endl;
+    } else {
+        std::cout << "Saved config: startOnBoot = " << (m_startOnBoot ? "true" : "false") 
+                  << ", startMinimized = " << (m_startMinimized ? "true" : "false") << std::endl;
+    }
 }

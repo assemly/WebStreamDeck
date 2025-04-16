@@ -135,6 +135,6 @@ endif()
 # Optional: Show console window on Windows alongside GUI (uses standard 'main' entry point)
 if(WIN32)
     set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
-    # target_link_options(${PROJECT_NAME} PRIVATE "/SUBSYSTEM:WINDOWS") # Use WinMain
-    target_link_options(${PROJECT_NAME} PRIVATE "/SUBSYSTEM:CONSOLE") # Use main
+    target_link_options(${PROJECT_NAME} PRIVATE "/SUBSYSTEM:WINDOWS") # Use WinMain
+    #target_link_options(${PROJECT_NAME} PRIVATE "/SUBSYSTEM:CONSOLE") # Use main
 endif() 

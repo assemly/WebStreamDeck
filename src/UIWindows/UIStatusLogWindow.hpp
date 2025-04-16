@@ -23,4 +23,12 @@ private:
 
      // Language selection state remains here
     int m_currentLangIndex = -1; // Initialize properly
+    bool m_startOnBoot = false;
+    bool m_startMinimized = false;
+
+    // Configuration loading/saving
+    void LoadConfig();
+    void SaveConfig();
+
+    const std::string m_configFilePath = "sysconfig.ini"; // Define config file path
 };

@@ -89,5 +89,8 @@
     "refresh_list_button": "Refresh List",
     "save_preset_label": "Save Current as Preset:",
     "save_as_button": "Save As",
-    "dnd_dragging_button_prefix": "Dragging"
+    "dnd_dragging_button_prefix": "Dragging",
+    "settings_header": "Settings",
+    "setting_start_on_boot": "Start with system",
+    "setting_start_minimized": "Start minimized to tray"
 }

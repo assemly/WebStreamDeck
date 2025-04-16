@@ -2,28 +2,62 @@
 #include <fstream>
 #include <iostream>
 #include <filesystem> // Requires C++17
+#include <algorithm> // Required for std::find
 
 namespace fs = std::filesystem;
 
 TranslationManager::TranslationManager(const std::string& langFolderPath, const std::string& defaultLang)
-    : m_langFolderPath(langFolderPath)
+    : m_langFolderPath(langFolderPath),
+      m_defaultLanguage(defaultLang) // Store default language
 {
+    // Loading is now deferred to Initialize()
+     m_currentLanguage = ""; // Ensure current language starts empty
+     std::cout << "TranslationManager constructed. Path: " << m_langFolderPath << ", Default: " << m_defaultLanguage << std::endl;
+}
+
+bool TranslationManager::Initialize() {
+     std::cout << "TranslationManager::Initialize() called." << std::endl;
     detectAvailableLanguages();
-    if (!setLanguage(defaultLang)) {
-        std::cerr << "Warning: Failed to load default language '" << defaultLang << "'.";
-        // Try loading English as a fallback if available
-        if (std::find(m_availableLanguages.begin(), m_availableLanguages.end(), "en") != m_availableLanguages.end()) {
-             if (setLanguage("en")) {
-                 std::cerr << " Loaded 'en' instead." << std::endl;
-             } else {
-                 std::cerr << " Failed to load 'en' fallback either." << std::endl;
-                 m_currentLanguage = ""; // Indicate no language loaded
-             }
-        } else {
-             std::cerr << " No fallback language found." << std::endl;
-             m_currentLanguage = "";
-        }
+
+    if (m_availableLanguages.empty()) {
+         std::cerr << "Error: No language files detected in " << m_langFolderPath << std::endl;
+         m_currentLanguage = ""; // Ensure it's marked as unloaded
+         return false; // Cannot initialize without languages
     }
+
+    std::cout << "Attempting to load default language: " << m_defaultLanguage << std::endl;
+    if (setLanguage(m_defaultLanguage)) {
+        std::cout << "Default language '" << m_defaultLanguage << "' loaded successfully." << std::endl;
+        return true; // Success
+    }
+
+    std::cerr << "Warning: Failed to load default language '" << m_defaultLanguage << "'.";
+    // Try loading English ("en") as a fallback if available and it wasn't the default
+    if (m_defaultLanguage != "en" && 
+        std::find(m_availableLanguages.begin(), m_availableLanguages.end(), "en") != m_availableLanguages.end()) 
+    {
+         std::cout << " Attempting to load 'en' as fallback." << std::endl;
+         if (setLanguage("en")) {
+             std::cout << " Fallback language 'en' loaded successfully." << std::endl;
+             return true; // Success with fallback
+         }
+         std::cerr << " Failed to load 'en' fallback either." << std::endl;
+    }
+     // Try loading the *first available* language if default and 'en' failed
+     else if (!m_availableLanguages.empty()) {
+         const std::string& firstLang = m_availableLanguages[0];
+         std::cout << " Attempting to load first available language: '" << firstLang << "'." << std::endl;
+          if (setLanguage(firstLang)) {
+             std::cout << " First available language '" << firstLang << "' loaded successfully." << std::endl;
+             return true; // Success with first available
+         }
+          std::cerr << " Failed to load first available language '" << firstLang << "' either." << std::endl;
+     }
+
+    // If all attempts fail
+    std::cerr << " Error: Could not load any language." << std::endl;
+    m_currentLanguage = ""; // Indicate no language loaded
+    return false; // Initialization failed
 }
 
 void TranslationManager::detectAvailableLanguages() {
