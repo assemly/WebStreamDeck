@@ -47,6 +47,9 @@ void PresetManagerComponent::scanPresetDirectory() {
 }
 
 void PresetManagerComponent::Draw() {
+
+
+
     ImGui::Separator();
     // ImGui::TextUnformatted(m_translator.get("preset_management_header").c_str()); // Remove separate header text
 
@@ -144,4 +147,5 @@ void PresetManagerComponent::Draw() {
     } // End of CollapsingHeader
 
     ImGui::Separator(); // Separator after the preset section (keep it outside or move inside? Let's keep it outside for visual structure)
+
 }

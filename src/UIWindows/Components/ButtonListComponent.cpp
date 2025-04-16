@@ -10,14 +10,22 @@ ButtonListComponent::ButtonListComponent(ConfigManager& configManager, Translati
 {}
 
 void ButtonListComponent::Draw() {
+    
+
+
     const auto& buttons = m_configManager.getButtons();
 
     // Use a CollapsingHeader to make the list expandable
-    std::string headerLabel = m_translator.get("loaded_buttons_header");
-    headerLabel += " (" + std::to_string(buttons.size()) + ")"; // Add count to header
+    // std::string headerLabel = m_translator.get("loaded_buttons_header");
+    // headerLabel += " (" + std::to_string(buttons.size()) + ")"; // Add count to header
+    
+    std::string visibleText = m_translator.get("loaded_buttons_header") + " (" + std::to_string(buttons.size()) + ")";
+    std::string fullLabel = visibleText + "##LoadedButtonsHeader"; // "##" 后面是稳定 ID
 
-    // Set ImGuiTreeNodeFlags_DefaultOpen to have it open by default
-    if (ImGui::CollapsingHeader(headerLabel.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+    // Set ImGuiTreeNodeFlags for the header
+
+    if (ImGui::CollapsingHeader(fullLabel.c_str(),  ImGuiTreeNodeFlags_DefaultOpen)) {
+
         // --- Loaded Buttons Table (only drawn if header is open) ---
         if (buttons.empty()) {
             ImGui::TextUnformatted(m_translator.get("no_buttons_loaded").c_str());
@@ -57,9 +65,14 @@ void ButtonListComponent::Draw() {
             }
         }
     } // End of CollapsingHeader block
+    else {
+    
+    }
 
     // Draw the modal if triggered (outside the collapsing header)
     DrawDeleteConfirmationModal();
+
+
 }
 
 

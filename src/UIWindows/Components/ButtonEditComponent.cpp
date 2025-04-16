@@ -154,6 +154,9 @@ void ButtonEditComponent::SubmitForm() {
 
 // Main Draw function for the Add/Edit form component
 void ButtonEditComponent::Draw() {
+    
+    ImGui::PushID(this);
+
     bool isEditing = !m_editingButtonId.empty();
     const char* headerText = isEditing ? m_translator.get("edit_button_header").c_str() : m_translator.get("add_new_button_header").c_str();
 
@@ -341,4 +344,6 @@ void ButtonEditComponent::Draw() {
     // --- File Dialog Handling --- (outside the collapsing header)
     // Must be called every frame to handle potential dialog display
     HandleFileDialog();
+
+    ImGui::PopID();
 }

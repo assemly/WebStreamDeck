@@ -41,16 +41,13 @@ void UIConfigurationWindow::loadCurrentSettings() {
 void UIConfigurationWindow::Draw() {
     ImGui::Begin(m_translator.get("config_window_title").c_str());
 
-    // <<< MODIFIED: Draw Button List using Component >>>
     m_buttonListComponent.Draw();
 
     ImGui::Separator();
 
-    // <<< MODIFIED: Draw Add/Edit Form using Component >>>
     m_buttonEditComponent.Draw();
 
-    // Draw Preset Management using Component
     m_presetManagerComponent.Draw();
 
-    ImGui::End(); // End Configuration Window
+    ImGui::End();
 }
