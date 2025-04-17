@@ -59,6 +59,7 @@ set(APP_SOURCES
     src/Services/ActionExecutionService.cpp
     src/Services/HttpServer.cpp
     src/Services/WebSocketServer.cpp
+    src/Services/SoundPlaybackService.cpp
     src/Managers/UIManager.cpp
     src/Managers/ConfigManager.cpp
     src/Managers/ActionRequestManager.cpp

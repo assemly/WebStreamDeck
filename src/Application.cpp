@@ -270,8 +270,9 @@ Application::Application()
     : m_configManager(),
       m_translationManager("assets/lang", "zh"), // Still construct here, but it does less
       m_networkManager(m_configManager),
-      m_actionRequestManager(m_configManager),
-      m_uiManager(this->m_configManager, this->m_actionRequestManager, this->m_translationManager, this->m_networkManager)
+      m_actionRequestManager(m_configManager, m_soundService),
+      m_uiManager(this->m_configManager, this->m_actionRequestManager, this->m_translationManager, this->m_networkManager),
+      m_soundService() // <<< ADDED: Default construct sound service
 {
 #ifdef _WIN32
     s_instance = this; // Set the static instance pointer
@@ -626,6 +627,34 @@ void Application::SetupCallbacks() {
 
 bool Application::StartServices() {
      std::cout << "Starting Services..." << std::endl;
+
+    // <<< ADDED: Initialize Sound Service >>>
+    std::cout << "[Services] Initializing Sound Service..." << std::endl;
+    if (!m_soundService.init()) {
+        std::cerr << "[Services] FAILED TO INITIALIZE SOUND SERVICE." << std::endl;
+        // Treat as non-fatal for now, but log error
+    } else {
+        std::cout << "[Services] Sound Service Initialized." << std::endl;
+        // Load sounds
+        std::cout << "[Services] Loading sounds..." << std::endl;
+        std::vector<std::pair<std::string, std::string>> soundsToLoad = {
+            {"gong", "assets/sounds/gong.wav"},
+            {"shang", "assets/sounds/shang.wav"},
+            {"jiao", "assets/sounds/jiao.wav"},
+            {"zhi", "assets/sounds/zhi.wav"},
+            {"yu", "assets/sounds/yu.wav"}
+        };
+        int loadedCount = 0;
+        for(const auto& pair : soundsToLoad) {
+            if (m_soundService.registerSound(pair.first, pair.second)) {
+                loadedCount++;
+            }
+            // registerSound already prints errors if it fails
+        }
+        std::cout << "[Services] Registered " << loadedCount << " out of " << soundsToLoad.size() << " sounds." << std::endl;
+    }
+    // <<< END: Initialize Sound Service >>>
+
     // Start Network Manager
     if (!m_networkManager.start(m_serverPort)) { 
         std::cerr << "[Services] FAILED TO START NETWORK SERVICES ON PORT " << m_serverPort << std::endl;
@@ -652,6 +681,12 @@ void Application::ShutdownServices() {
     std::cout << "[Services] Stopping network services..." << std::endl;
     m_networkManager.stop(); 
     std::cout << "[Services] Network services stopped." << std::endl;
+
+    // <<< ADDED: Shutdown Sound Service >>>
+    std::cout << "[Services] Shutting down sound service..." << std::endl;
+    m_soundService.shutdown();
+    std::cout << "[Services] Sound service shut down." << std::endl;
+    // <<< END: Shutdown Sound Service >>>
 
     // Uninitialize Core Audio Control (Windows only)
     #ifdef _WIN32

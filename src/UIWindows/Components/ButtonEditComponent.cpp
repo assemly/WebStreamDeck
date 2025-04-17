@@ -245,9 +245,9 @@ void ButtonEditComponent::Draw() {
             if (ImGui::Combo("##ActionTypeCombo_EditComp", &m_newButtonActionTypeIndex, actionTypeDisplayItems.data(), actionTypeDisplayItems.size())) {
                 std::string newActionType = (m_newButtonActionTypeIndex >= 0 && m_newButtonActionTypeIndex < m_supportedActionTypes.size()) ? m_supportedActionTypes[m_newButtonActionTypeIndex] : "";
                 if (previousActionType == "hotkey" && newActionType != "hotkey") m_isCapturingHotkey = false;
-                if (newActionType.rfind("media_", 0) == 0) {
+                if (newActionType.rfind("media_", 0) == 0 || newActionType.rfind("play_", 0) == 0) {
                     m_isCapturingHotkey = false;
-                    m_newButtonActionParam[0] = '\\0';
+                    m_newButtonActionParam[0] = '\0';
                 }
             }
             ImGui::PopItemWidth();
@@ -265,15 +265,16 @@ void ButtonEditComponent::Draw() {
                 bool isHotkeyAction = (currentActionTypeStr == "hotkey");
                 bool isLaunchAppAction = (currentActionTypeStr == "launch_app");
                 bool isMediaAction = (currentActionTypeStr.rfind("media_", 0) == 0);
+                bool isPlaySoundAction = (currentActionTypeStr.rfind("play_", 0) == 0);
 
-                if (isMediaAction) {
+                if (isMediaAction || isPlaySoundAction) {
                     ImGui::BeginDisabled(true);
                     char disabledText[] = "N/A"; // Shorter text
                     ImGui::PushItemWidth(-FLT_MIN);
                     ImGui::InputText("##ActionParamDisabled_EditComp", disabledText, sizeof(disabledText), ImGuiInputTextFlags_ReadOnly);
                     ImGui::PopItemWidth();
                     ImGui::EndDisabled();
-                     if (strlen(m_newButtonActionParam) > 0) { m_newButtonActionParam[0] = '\\0'; }
+                     if (strlen(m_newButtonActionParam) > 0) { m_newButtonActionParam[0] = '\0'; }
                 } else if (isHotkeyAction) {
                      ImGui::Checkbox("##ManualHotkeyCheckbox_EditComp", &m_manualHotkeyEntry);
                      ImGui::SameLine(); ImGui::TextUnformatted(m_translator.get("hotkey_manual_input_checkbox").c_str());
@@ -301,7 +302,7 @@ void ButtonEditComponent::Draw() {
                              if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", m_translator.get("hotkey_capture_tooltip_start").c_str()); }
                              if (ImGui::IsItemClicked()) {
                                  m_isCapturingHotkey = true;
-                                 m_newButtonActionParam[0] = '\\0';
+                                 m_newButtonActionParam[0] = '\0';
                                  ImGui::SetKeyboardFocusHere(-1);
                              }
                          }
@@ -335,7 +336,7 @@ void ButtonEditComponent::Draw() {
                              if (result == NFD_OKAY) {
                                  std::cout << "[ButtonEditComponent] App selected: " << outPath << std::endl;
                                  strncpy(m_newButtonActionParam, outPath, sizeof(m_newButtonActionParam) - 1);
-                                 m_newButtonActionParam[sizeof(m_newButtonActionParam) - 1] = '\\0'; // Ensure null termination
+                                 m_newButtonActionParam[sizeof(m_newButtonActionParam) - 1] = '\0'; // Ensure null termination
                                  NFD_FreePath(outPath); // IMPORTANT: Free the path returned by NFD
                              } else if (result == NFD_CANCEL) {
                                  std::cout << "[ButtonEditComponent] App selection cancelled." << std::endl;

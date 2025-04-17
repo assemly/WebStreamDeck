@@ -44,7 +44,8 @@ private:
     // Consider moving this to a shared constant or passing from parent if needed elsewhere
     const std::vector<std::string> m_supportedActionTypes = {
         "launch_app", "open_url", "hotkey", "media_volume_up", "media_volume_down",
-        "media_mute", "media_play_pause", "media_next_track", "media_prev_track", "media_stop"
+        "media_mute", "media_play_pause", "media_next_track", "media_prev_track", "media_stop",
+        "play_gong", "play_shang", "play_jiao", "play_zhi", "play_yu"
     };
 
     // Private helpers

@@ -3,6 +3,9 @@
 #include <cctype>    // For towlower
 #include <sstream>   // For std::wstringstream
 #include <iomanip>   // For std::setfill and std::setw
+#include <vector>    // Include vector if needed, e.g., for WideToUtf8 implementation if it uses it
+#include <locale>    // Potentially needed for ToLowerW on non-windows
+#include <codecvt>    // Potentially needed for conversions on non-windows
 
 namespace StringUtils {
 
@@ -69,6 +72,84 @@ std::wstring WStringToHex(const std::wstring& input) {
         ss << L" 0x" << std::setw(4) << static_cast<unsigned int>(wc);
     }
     return ss.str();
+}
+
+// Helper function to convert key name string (case-insensitive) to VK code
+WORD StringToVkCode(const std::string& keyName) {
+    std::string upperKeyName = keyName;
+    std::transform(upperKeyName.begin(), upperKeyName.end(), upperKeyName.begin(), ::toupper);
+
+    // Modifier Keys
+    if (upperKeyName == "CTRL" || upperKeyName == "CONTROL") return VK_CONTROL;
+    if (upperKeyName == "ALT") return VK_MENU; 
+    if (upperKeyName == "SHIFT") return VK_SHIFT;
+    if (upperKeyName == "WIN" || upperKeyName == "WINDOWS" || upperKeyName == "LWIN") return VK_LWIN; 
+    if (upperKeyName == "RWIN") return VK_RWIN; 
+
+    // Function Keys
+    if (upperKeyName == "F1") return VK_F1; if (upperKeyName == "F2") return VK_F2;
+    if (upperKeyName == "F3") return VK_F3; if (upperKeyName == "F4") return VK_F4;
+    if (upperKeyName == "F5") return VK_F5; if (upperKeyName == "F6") return VK_F6;
+    if (upperKeyName == "F7") return VK_F7; if (upperKeyName == "F8") return VK_F8;
+    if (upperKeyName == "F9") return VK_F9; if (upperKeyName == "F10") return VK_F10;
+    if (upperKeyName == "F11") return VK_F11; if (upperKeyName == "F12") return VK_F12;
+    
+    // Typing Keys (A-Z, 0-9)
+    if (upperKeyName.length() == 1) {
+        char c = upperKeyName[0];
+        if (c >= 'A' && c <= 'Z') return c;
+        if (c >= '0' && c <= '9') return c;
+    }
+
+    // Special Keys
+    if (upperKeyName == "SPACE" || upperKeyName == " ") return VK_SPACE;
+    if (upperKeyName == "ENTER" || upperKeyName == "RETURN") return VK_RETURN;
+    if (upperKeyName == "TAB") return VK_TAB;
+    if (upperKeyName == "ESC" || upperKeyName == "ESCAPE") return VK_ESCAPE;
+    if (upperKeyName == "BACKSPACE") return VK_BACK;
+    if (upperKeyName == "DELETE" || upperKeyName == "DEL") return VK_DELETE;
+    if (upperKeyName == "INSERT" || upperKeyName == "INS") return VK_INSERT;
+    if (upperKeyName == "HOME") return VK_HOME;
+    if (upperKeyName == "END") return VK_END;
+    if (upperKeyName == "PAGEUP" || upperKeyName == "PGUP") return VK_PRIOR; 
+    if (upperKeyName == "PAGEDOWN" || upperKeyName == "PGDN") return VK_NEXT; 
+    if (upperKeyName == "LEFT") return VK_LEFT;
+    if (upperKeyName == "RIGHT") return VK_RIGHT;
+    if (upperKeyName == "UP") return VK_UP;
+    if (upperKeyName == "DOWN") return VK_DOWN;
+    if (upperKeyName == "CAPSLOCK") return VK_CAPITAL;
+    if (upperKeyName == "NUMLOCK") return VK_NUMLOCK;
+    if (upperKeyName == "SCROLLLOCK") return VK_SCROLL;
+    if (upperKeyName == "PRINTSCREEN" || upperKeyName == "PRTSC") return VK_SNAPSHOT;
+
+    // Numpad Keys
+    if (upperKeyName == "NUMPAD0") return VK_NUMPAD0; if (upperKeyName == "NUMPAD1") return VK_NUMPAD1;
+    if (upperKeyName == "NUMPAD2") return VK_NUMPAD2; if (upperKeyName == "NUMPAD3") return VK_NUMPAD3;
+    if (upperKeyName == "NUMPAD4") return VK_NUMPAD4; if (upperKeyName == "NUMPAD5") return VK_NUMPAD5;
+    if (upperKeyName == "NUMPAD6") return VK_NUMPAD6; if (upperKeyName == "NUMPAD7") return VK_NUMPAD7;
+    if (upperKeyName == "NUMPAD8") return VK_NUMPAD8; if (upperKeyName == "NUMPAD9") return VK_NUMPAD9;
+    if (upperKeyName == "MULTIPLY" || upperKeyName == "NUMPAD*") return VK_MULTIPLY;
+    if (upperKeyName == "ADD" || upperKeyName == "NUMPAD+") return VK_ADD;
+    if (upperKeyName == "SEPARATOR") return VK_SEPARATOR; // Usually locale-specific
+    if (upperKeyName == "SUBTRACT" || upperKeyName == "NUMPAD-") return VK_SUBTRACT;
+    if (upperKeyName == "DECIMAL" || upperKeyName == "NUMPAD.") return VK_DECIMAL;
+    if (upperKeyName == "DIVIDE" || upperKeyName == "NUMPAD/") return VK_DIVIDE;
+
+    // OEM Keys (Common US Layout)
+    if (upperKeyName == "+" || upperKeyName == "=") return VK_OEM_PLUS; 
+    if (upperKeyName == "-" || upperKeyName == "_") return VK_OEM_MINUS;
+    if (upperKeyName == "," || upperKeyName == "<") return VK_OEM_COMMA;
+    if (upperKeyName == "." || upperKeyName == ">") return VK_OEM_PERIOD;
+    if (upperKeyName == "/" || upperKeyName == "?") return VK_OEM_2; 
+    if (upperKeyName == "`" || upperKeyName == "~") return VK_OEM_3; 
+    if (upperKeyName == "[" || upperKeyName == "{") return VK_OEM_4; 
+    if (upperKeyName == "\\" || upperKeyName == "|") return VK_OEM_5; 
+    if (upperKeyName == "]" || upperKeyName == "}") return VK_OEM_6; 
+    if (upperKeyName == "'" || upperKeyName == "\"") return VK_OEM_7; // Single/double quote
+    if (upperKeyName == ";" || upperKeyName == ":") return VK_OEM_1; // Semicolon/colon
+
+    std::cerr << "Warning: Unknown key name '" << keyName << "'" << std::endl;
+    return 0; // Return 0 for unknown keys
 }
 
 #else

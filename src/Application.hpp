@@ -6,6 +6,7 @@
 #include "Managers/NetworkManager.hpp"
 #include "Managers/ActionRequestManager.hpp"
 #include "Managers/UIManager.hpp"
+#include "Services/SoundPlaybackService.hpp"
 
 // Forward declaration only needed for GLFWwindow now
 struct GLFWwindow;
@@ -65,6 +66,7 @@ private:
     NetworkManager m_networkManager;
     ActionRequestManager m_actionRequestManager;
     UIManager m_uiManager;
+    SoundPlaybackService m_soundService;
 
     // Keep track of initialization status
     bool m_initialized = false;

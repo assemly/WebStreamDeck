@@ -3,10 +3,10 @@
 #include "ConfigManager.hpp"       // Need full definition for calling getButtonById
 #include <iostream> // For debug logging
 
-// Constructor implementation - initializes ConfigManager ref, default constructs Service member
-ActionRequestManager::ActionRequestManager(ConfigManager& configManager)
-    : m_configManager(configManager)
-      // m_executionService is default-constructed
+// Constructor implementation updated
+ActionRequestManager::ActionRequestManager(ConfigManager& configManager, SoundPlaybackService& soundService)
+    : m_configManager(configManager),
+      m_executionService(soundService)
 {}
 
 // Call this from any thread to request an action

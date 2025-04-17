@@ -109,5 +109,10 @@
     "menu_help": "Help",
     "menu_help_about": "About",
     "about_bilibili_profile": "Bilibili Profile",
-    "about_testers": "Testers"
+    "about_testers": "Testers",
+    "action_type_play_gong_display": "Play: Gong",
+    "action_type_play_shang_display": "Play: Shang",
+    "action_type_play_jiao_display": "Play: Jiao",
+    "action_type_play_zhi_display": "Play: Zhi",
+    "action_type_play_yu_display": "Play: Yu"
 }

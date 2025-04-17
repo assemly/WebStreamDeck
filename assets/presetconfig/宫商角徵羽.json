@@ -1,0 +1,78 @@
+{
+    "buttons": [       
+        {
+            "action_param": "",
+            "action_type": "play_gong",
+            "icon_path": "assets/icons/gong.png",
+            "id": "btn_gong",
+            "name": "宫"
+        },
+        {
+            "action_param": "",
+            "action_type": "play_shang",
+            "icon_path": "",
+            "id": "btn_shang",
+            "name": "商"
+        },
+        {
+            "action_param": "",
+            "action_type": "play_jiao",
+            "icon_path": "",
+            "id": "btn_jiao",
+            "name": "角"
+        },
+        {
+            "action_param": "",
+            "action_type": "play_zhi",
+            "icon_path": "",
+            "id": "btn_zhi",
+            "name": "徵"
+        },
+        {
+            "action_param": "",
+            "action_type": "play_yu",
+            "icon_path": "",
+            "id": "btn_yu",
+            "name": "羽"
+        }
+    ],
+    "layout": {
+        "cols_per_page": 7,
+        "page_count": 1,
+        "pages": [
+            [
+                0,
+                [
+                    [
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        ""
+                    ],
+                    [
+                        "",
+                        "btn_gong",
+                        "btn_shang",
+                        "btn_jiao",
+                        "btn_zhi",
+                        "btn_yu",
+                        ""
+                    ],
+                    [
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        ""
+                    ]
+                ]
+            ]
+        ],
+        "rows_per_page": 3
+    }
+}

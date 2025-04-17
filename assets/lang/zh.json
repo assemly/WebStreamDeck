@@ -109,5 +109,10 @@
     "menu_help": "帮助",
     "menu_help_about": "关于",
     "about_bilibili_profile": "B站主页",
-    "about_testers": "测试人员"
+    "about_testers": "测试人员",
+    "action_type_play_gong_display": "播放：宫",
+    "action_type_play_shang_display": "播放：商",
+    "action_type_play_jiao_display": "播放：角",
+    "action_type_play_zhi_display": "播放：徵",
+    "action_type_play_yu_display": "播放：羽"
 }

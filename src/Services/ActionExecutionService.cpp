@@ -1,5 +1,6 @@
 #include "ActionExecutionService.hpp"
 #include "../Utils/InputUtils.hpp" // Needed for SimulateMediaKeyPress and audio
+#include "../Utils/StringUtils.hpp" // Added
 #include <iostream> // For error reporting
 #include <string> // Needed for wstring conversion, etc.
 #include <vector> // Needed for wstring conversion buffer & INPUT array
@@ -17,101 +18,13 @@
 #include <cstdlib> // For system()
 #endif
 
-// --- Helper Functions (Moved from ActionExecutor.cpp) --- 
-
-#ifdef _WIN32
-// Helper function for string conversion to wstring
-std::wstring StringToWstring(const std::string& str) {
-    if (str.empty()) return std::wstring();
-    int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
-    std::wstring wstrTo(size_needed, 0);
-    MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstrTo[0], size_needed);
-    return wstrTo;
-}
-
-// Helper function to convert key name string (case-insensitive) to VK code
-WORD StringToVkCode(const std::string& keyName) {
-    std::string upperKeyName = keyName;
-    std::transform(upperKeyName.begin(), upperKeyName.end(), upperKeyName.begin(), ::toupper);
-
-    // Modifier Keys
-    if (upperKeyName == "CTRL" || upperKeyName == "CONTROL") return VK_CONTROL;
-    if (upperKeyName == "ALT") return VK_MENU; 
-    if (upperKeyName == "SHIFT") return VK_SHIFT;
-    if (upperKeyName == "WIN" || upperKeyName == "WINDOWS" || upperKeyName == "LWIN") return VK_LWIN; 
-    if (upperKeyName == "RWIN") return VK_RWIN; 
-
-    // Function Keys
-    if (upperKeyName == "F1") return VK_F1; if (upperKeyName == "F2") return VK_F2;
-    if (upperKeyName == "F3") return VK_F3; if (upperKeyName == "F4") return VK_F4;
-    if (upperKeyName == "F5") return VK_F5; if (upperKeyName == "F6") return VK_F6;
-    if (upperKeyName == "F7") return VK_F7; if (upperKeyName == "F8") return VK_F8;
-    if (upperKeyName == "F9") return VK_F9; if (upperKeyName == "F10") return VK_F10;
-    if (upperKeyName == "F11") return VK_F11; if (upperKeyName == "F12") return VK_F12;
-    
-    // Typing Keys (A-Z, 0-9)
-    if (upperKeyName.length() == 1) {
-        char c = upperKeyName[0];
-        if (c >= 'A' && c <= 'Z') return c;
-        if (c >= '0' && c <= '9') return c;
-    }
-
-    // Special Keys
-    if (upperKeyName == "SPACE" || upperKeyName == " ") return VK_SPACE;
-    if (upperKeyName == "ENTER" || upperKeyName == "RETURN") return VK_RETURN;
-    if (upperKeyName == "TAB") return VK_TAB;
-    if (upperKeyName == "ESC" || upperKeyName == "ESCAPE") return VK_ESCAPE;
-    if (upperKeyName == "BACKSPACE") return VK_BACK;
-    if (upperKeyName == "DELETE" || upperKeyName == "DEL") return VK_DELETE;
-    if (upperKeyName == "INSERT" || upperKeyName == "INS") return VK_INSERT;
-    if (upperKeyName == "HOME") return VK_HOME;
-    if (upperKeyName == "END") return VK_END;
-    if (upperKeyName == "PAGEUP" || upperKeyName == "PGUP") return VK_PRIOR; 
-    if (upperKeyName == "PAGEDOWN" || upperKeyName == "PGDN") return VK_NEXT; 
-    if (upperKeyName == "LEFT") return VK_LEFT;
-    if (upperKeyName == "RIGHT") return VK_RIGHT;
-    if (upperKeyName == "UP") return VK_UP;
-    if (upperKeyName == "DOWN") return VK_DOWN;
-    if (upperKeyName == "CAPSLOCK") return VK_CAPITAL;
-    if (upperKeyName == "NUMLOCK") return VK_NUMLOCK;
-    if (upperKeyName == "SCROLLLOCK") return VK_SCROLL;
-    if (upperKeyName == "PRINTSCREEN" || upperKeyName == "PRTSC") return VK_SNAPSHOT;
-
-    // Numpad Keys
-    if (upperKeyName == "NUMPAD0") return VK_NUMPAD0; if (upperKeyName == "NUMPAD1") return VK_NUMPAD1;
-    if (upperKeyName == "NUMPAD2") return VK_NUMPAD2; if (upperKeyName == "NUMPAD3") return VK_NUMPAD3;
-    if (upperKeyName == "NUMPAD4") return VK_NUMPAD4; if (upperKeyName == "NUMPAD5") return VK_NUMPAD5;
-    if (upperKeyName == "NUMPAD6") return VK_NUMPAD6; if (upperKeyName == "NUMPAD7") return VK_NUMPAD7;
-    if (upperKeyName == "NUMPAD8") return VK_NUMPAD8; if (upperKeyName == "NUMPAD9") return VK_NUMPAD9;
-    if (upperKeyName == "MULTIPLY" || upperKeyName == "NUMPAD*") return VK_MULTIPLY;
-    if (upperKeyName == "ADD" || upperKeyName == "NUMPAD+") return VK_ADD;
-    if (upperKeyName == "SEPARATOR") return VK_SEPARATOR; // Usually locale-specific
-    if (upperKeyName == "SUBTRACT" || upperKeyName == "NUMPAD-") return VK_SUBTRACT;
-    if (upperKeyName == "DECIMAL" || upperKeyName == "NUMPAD.") return VK_DECIMAL;
-    if (upperKeyName == "DIVIDE" || upperKeyName == "NUMPAD/") return VK_DIVIDE;
-
-    // OEM Keys (Common US Layout)
-    if (upperKeyName == "+" || upperKeyName == "=") return VK_OEM_PLUS; 
-    if (upperKeyName == "-" || upperKeyName == "_") return VK_OEM_MINUS;
-    if (upperKeyName == "," || upperKeyName == "<") return VK_OEM_COMMA;
-    if (upperKeyName == "." || upperKeyName == ">") return VK_OEM_PERIOD;
-    if (upperKeyName == "/" || upperKeyName == "?") return VK_OEM_2; 
-    if (upperKeyName == "`" || upperKeyName == "~") return VK_OEM_3; 
-    if (upperKeyName == "[" || upperKeyName == "{") return VK_OEM_4; 
-    if (upperKeyName == "\\" || upperKeyName == "|") return VK_OEM_5; 
-    if (upperKeyName == "]" || upperKeyName == "}") return VK_OEM_6; 
-    if (upperKeyName == "'" || upperKeyName == "\"") return VK_OEM_7; // Single/double quote
-    if (upperKeyName == ";" || upperKeyName == ":") return VK_OEM_1; // Semicolon/colon
-
-    std::cerr << "Warning: Unknown key name '" << keyName << "'" << std::endl;
-    return 0; // Return 0 for unknown keys
-}
-#endif // _WIN32
+// --- Helper Functions (Moved to StringUtils) --- 
 
 // --- ActionExecutionService Implementation --- 
 
-// Constructor (doesn't need ConfigManager anymore)
-ActionExecutionService::ActionExecutionService() {}
+// Constructor updated to take SoundPlaybackService reference
+ActionExecutionService::ActionExecutionService(SoundPlaybackService& soundService)
+    : m_soundService(soundService) {}
 
 // Executes an action based on explicit type and parameter
 void ActionExecutionService::executeAction(const std::string& actionType, const std::string& actionParam) {
@@ -163,7 +76,23 @@ void ActionExecutionService::executeAction(const std::string& actionType, const 
         std::cout << "Executing: Media Stop (Simulate Key)" << std::endl;
         InputUtils::SimulateMediaKeyPress(VK_MEDIA_STOP);
     }
-    // --- END of Media Key Actions ---
+    // --- ADDED: Chinese Musical Notes Actions ---
+    else if (actionType == "play_gong") {
+        m_soundService.playSound("gong"); // Use lowercase name
+    }
+    else if (actionType == "play_shang") {
+        m_soundService.playSound("shang"); // Use lowercase name
+    }
+    else if (actionType == "play_jiao") {
+        m_soundService.playSound("jiao"); // Use lowercase name
+    }
+    else if (actionType == "play_zhi") {
+        m_soundService.playSound("zhi"); // Use lowercase name
+    }
+    else if (actionType == "play_yu") {
+        m_soundService.playSound("yu"); // Use lowercase name
+    }
+    // --- END of Added Actions ---
     else {
         std::cerr << "Error: Unknown action type '" << actionType << "' requested." << std::endl;
     }
@@ -174,7 +103,7 @@ void ActionExecutionService::executeAction(const std::string& actionType, const 
 bool ActionExecutionService::executeLaunchApp(const std::string& path) {
 #ifdef _WIN32
     // Convert UTF-8 path std::string to std::wstring for ShellExecuteW
-    std::wstring wPath = StringToWstring(path); // Use existing helper
+    std::wstring wPath = StringUtils::Utf8ToWide(path); // Use StringUtils namespace
     if (wPath.empty() && !path.empty()) { // Check if conversion failed
         std::cerr << "Error executing launch_app: Failed to convert path to wstring: " << path << std::endl;
         return false;
@@ -200,118 +129,97 @@ bool ActionExecutionService::executeLaunchApp(const std::string& path) {
 
 bool ActionExecutionService::executeOpenUrl(const std::string& url) {
 #ifdef _WIN32
-    // Convert UTF-8 url std::string to std::wstring for ShellExecuteW
-    std::wstring wUrl = StringToWstring(url);
+    std::wstring wUrl = StringUtils::Utf8ToWide(url); // Use StringUtils namespace
     if (wUrl.empty() && !url.empty()) { // Check if conversion failed
-        std::cerr << "Error executing open_url: Failed to convert URL to wstring: " << url << std::endl;
+         std::cerr << "Error executing open_url: Failed to convert URL to wstring: " << url << std::endl;
         return false;
     }
-
     HINSTANCE result = ShellExecuteW(NULL, L"open", wUrl.c_str(), NULL, NULL, SW_SHOWNORMAL);
-    if ((intptr_t)result <= 32) {
-         // Log the original url for clarity
-         std::cerr << "Error executing open_url: Failed to open '" << url << "' (ShellExecuteW Error code: " << (intptr_t)result << ")" << std::endl;
-         return false;
+    if ((intptr_t)result <= 32) { 
+        std::cerr << "Error executing open_url: Failed to open '" << url << "' (ShellExecuteW Error code: " << (intptr_t)result << ")" << std::endl;
+        return false;
     }
     return true;
 #else
-    std::cerr << "Error: open_url action is currently only supported on Windows." << std::endl;
-    // Example for Linux/macOS:
-    // std::string command = "xdg-open " + url; // Linux
-    // std::string command = "open " + url; // macOS
-    // int result = system(command.c_str());
-    // return result == 0;
-    return false;
+    // Example for Linux/macOS
+    std::string command;
+    #ifdef __linux__
+        command = "xdg-open \"" + url + "\""; // Use xdg-open on Linux, quote URL
+    #elif __APPLE__
+        command = "open \"" + url + "\""; // Use open on macOS, quote URL
+    #else
+         std::cerr << "Error: open_url action is not implemented for this platform." << std::endl;
+        return false;
+    #endif
+    int res = system(command.c_str());
+    if (res != 0) {
+        std::cerr << "Error executing open_url: Failed to execute command '" << command << "' (return code: " << res << ")" << std::endl;
+        return false;
+    }
+    return true;
 #endif
 }
 
-bool ActionExecutionService::executeHotkey(const std::string& keys) {
+bool ActionExecutionService::executeHotkey(const std::string& hotkeyString) {
 #ifdef _WIN32
-    std::vector<WORD> modifierCodes;
-    WORD mainKeyCode = 0;
-
-    // Parse the keys string (e.g., "CTRL+ALT+T")
-    std::stringstream ss(keys);
+    std::vector<INPUT> inputs;
+    std::vector<WORD> keyCodes;
+    std::stringstream ss(hotkeyString);
     std::string segment;
+
+    // Parse the hotkey string (e.g., "CTRL+ALT+T")
     while (std::getline(ss, segment, '+')) {
-        segment.erase(0, segment.find_first_not_of(" \t\r\n"));
-        segment.erase(segment.find_last_not_of(" \t\r\n") + 1);
-        if (segment.empty()) continue;
-
-        WORD vk = StringToVkCode(segment); // Use helper function
-        if (vk == 0) {
-             std::cerr << "Error: Invalid key name '" << segment << "' in hotkey string: " << keys << std::endl;
-             return false; 
-        }
-        if (vk == VK_CONTROL || vk == VK_MENU || vk == VK_SHIFT || vk == VK_LWIN || vk == VK_RWIN) {
-            WORD generic_vk = (vk == VK_RWIN) ? VK_LWIN : vk; // Normalize RWIN to LWIN for press/release
-            bool found = false;
-            for(WORD mod : modifierCodes) { if (mod == generic_vk) { found = true; break; } }
-            if (!found) modifierCodes.push_back(generic_vk);
+        WORD vk = StringUtils::StringToVkCode(segment); // Use StringUtils namespace
+        if (vk != 0) {
+            keyCodes.push_back(vk);
         } else {
-            if (mainKeyCode != 0) {
-                std::cerr << "Error: Multiple non-modifier keys specified in hotkey string: " << keys << std::endl;
-                return false; 
-            }
-            mainKeyCode = vk;
+            std::cerr << "Error executing hotkey: Invalid key segment '" << segment << "' in hotkey string: " << hotkeyString << std::endl;
+            return false;
         }
     }
 
-    if (mainKeyCode == 0) {
-        std::cerr << "Error: No main key specified in hotkey string: " << keys << std::endl;
-        return false; 
+    if (keyCodes.empty()) {
+         std::cerr << "Error executing hotkey: No valid key codes parsed from string: " << hotkeyString << std::endl;
+        return false;
     }
 
-    // Prepare INPUT structures
-    const size_t MAX_INPUTS = 10; 
-    std::vector<INPUT> inputs(MAX_INPUTS);
-    ZeroMemory(inputs.data(), sizeof(INPUT) * MAX_INPUTS);
-    size_t inputIndex = 0;
-
-    // Press Modifiers
-    for (WORD modCode : modifierCodes) {
-        if(inputIndex >= MAX_INPUTS) { std::cerr << "Hotkey too complex." << std::endl; return false; } 
-        inputs[inputIndex].type = INPUT_KEYBOARD;
-        inputs[inputIndex].ki.wVk = modCode;
-        inputIndex++;
+    // Press keys down
+    inputs.resize(keyCodes.size());
+    for (size_t i = 0; i < keyCodes.size(); ++i) {
+        inputs[i].type = INPUT_KEYBOARD;
+        inputs[i].ki.wVk = keyCodes[i];
+        inputs[i].ki.dwFlags = 0; // Key down
+        inputs[i].ki.time = 0;
+        inputs[i].ki.dwExtraInfo = 0;
     }
-    // Press Main Key
-    if(inputIndex >= MAX_INPUTS) { std::cerr << "Hotkey too complex." << std::endl; return false; } 
-    inputs[inputIndex].type = INPUT_KEYBOARD;
-    inputs[inputIndex].ki.wVk = mainKeyCode;
-    inputIndex++;
-    // Release Main Key
-    if(inputIndex >= MAX_INPUTS) { std::cerr << "Hotkey too complex." << std::endl; return false; } 
-    inputs[inputIndex].type = INPUT_KEYBOARD;
-    inputs[inputIndex].ki.wVk = mainKeyCode;
-    inputs[inputIndex].ki.dwFlags = KEYEVENTF_KEYUP;
-    inputIndex++;
-    // Release Modifiers (reverse)
-    for (auto it = modifierCodes.rbegin(); it != modifierCodes.rend(); ++it) {
-         if(inputIndex >= MAX_INPUTS) { std::cerr << "Hotkey too complex." << std::endl; return false; } 
-        inputs[inputIndex].type = INPUT_KEYBOARD;
-        inputs[inputIndex].ki.wVk = *it;
-        inputs[inputIndex].ki.dwFlags = KEYEVENTF_KEYUP;
-        inputIndex++;
+    UINT sentDown = SendInput(inputs.size(), inputs.data(), sizeof(INPUT));
+    if (sentDown != inputs.size()) {
+        std::cerr << "Error executing hotkey: SendInput failed to press keys down (Error code: " << GetLastError() << ")" << std::endl;
+        // Attempt to release any keys that might have been pressed
+         for (size_t i = 0; i < keyCodes.size(); ++i) inputs[i].ki.dwFlags = KEYEVENTF_KEYUP;
+         SendInput(inputs.size(), inputs.data(), sizeof(INPUT));
+        return false;
     }
 
-    // Send the inputs
-    if (inputIndex > 0) {
-         UINT sent = SendInput(static_cast<UINT>(inputIndex), inputs.data(), sizeof(INPUT));
-         if (sent != inputIndex) {
-             std::cerr << "Error: SendInput failed for hotkey '" << keys << "'. Error: " << GetLastError() << std::endl;
-             // Best effort cleanup might be needed here
-             return false;
-         } else {
-             std::cout << "Executed hotkey: " << keys << std::endl;
-             return true;
-         }
-    } else {
-         std::cerr << "Error: No inputs generated for hotkey: " << keys << std::endl;
-         return false;
+     // Give a small delay before releasing keys, sometimes needed
+    Sleep(20); // 20ms delay
+
+    // Release keys up (in reverse order)
+    for (size_t i = 0; i < keyCodes.size(); ++i) {
+        inputs[i].ki.dwFlags = KEYEVENTF_KEYUP; // Key up
     }
+    // It's generally recommended to release in reverse order of press
+    std::reverse(inputs.begin(), inputs.end()); 
+    UINT sentUp = SendInput(inputs.size(), inputs.data(), sizeof(INPUT));
+     if (sentUp != inputs.size()) {
+        std::cerr << "Error executing hotkey: SendInput failed to release keys up (Error code: " << GetLastError() << ")" << std::endl;
+        // This is less critical, but logging is useful
+        return false; // Consider if failure to release should be a hard fail
+    }
+
+    return true;
 #else
-    std::cerr << "Error: Hotkey action is currently only supported on Windows." << std::endl;
+    std::cerr << "Error: hotkey action is currently only supported on Windows." << std::endl;
     return false;
 #endif
 } 

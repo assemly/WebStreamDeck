@@ -8,6 +8,7 @@
     "glew",
     "stb",
     "giflib",
-    "nativefiledialog-extended"
+    "nativefiledialog-extended",
+    "miniaudio"
   ]
 } 

@@ -24,6 +24,9 @@ std::wstring ToLowerW(std::wstring str);
 // Convert std::wstring to a hex representation string (for debugging)
 std::wstring WStringToHex(const std::wstring& input);
 
+// Helper function to convert key name string (case-insensitive) to VK code
+WORD StringToVkCode(const std::string& keyName);
+
 #else
 // On other platforms, std::wstring might exist but the conversion isn't needed
 // or needs a different approach. We can provide a stub declaration if needed,
