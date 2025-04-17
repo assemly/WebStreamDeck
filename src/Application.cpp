@@ -160,7 +160,7 @@ LRESULT CALLBACK Application::TrayWndProc(HWND hWnd, UINT message, WPARAM wParam
 
     return DefWindowProc(hWnd, message, wParam, lParam);
 }
-#endif // _WIN32
+#endif
 
 // --- Static Callbacks ---
 static void glfw_error_callback(int error, const char* description)
@@ -637,21 +637,42 @@ bool Application::StartServices() {
         std::cout << "[Services] Sound Service Initialized." << std::endl;
         // Load sounds
         std::cout << "[Services] Loading sounds..." << std::endl;
-        std::vector<std::pair<std::string, std::string>> soundsToLoad = {
-            {"gong", "assets/sounds/gong.wav"},
-            {"shang", "assets/sounds/shang.wav"},
-            {"jiao", "assets/sounds/jiao.wav"},
-            {"zhi", "assets/sounds/zhi.wav"},
-            {"yu", "assets/sounds/yu.wav"}
-        };
+        // --- MODIFIED: Scan directory instead of hardcoding ---
+        std::string soundDir = "assets/sounds";
         int loadedCount = 0;
-        for(const auto& pair : soundsToLoad) {
-            if (m_soundService.registerSound(pair.first, pair.second)) {
-                loadedCount++;
+        int attemptedCount = 0;
+        try {
+            if (std::filesystem::exists(soundDir) && std::filesystem::is_directory(soundDir)) {
+                for (const auto& entry : std::filesystem::directory_iterator(soundDir)) {
+                    if (entry.is_regular_file()) {
+                        std::filesystem::path filePath = entry.path();
+                        std::string extension = filePath.extension().string();
+                        std::string filename = filePath.filename().stem().string(); // Get filename without extension
+
+                        // Convert extension to lower case for comparison
+                        std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+
+                        if (extension == ".wav") {
+                            attemptedCount++;
+                            // Use lowercase filename as the sound name key
+                            std::string soundName = filename;
+                            std::transform(soundName.begin(), soundName.end(), soundName.begin(), ::tolower); 
+                            
+                            if (m_soundService.registerSound(soundName, filePath.string())) {
+                                loadedCount++;
+                            }
+                            // registerSound already prints errors if it fails
+                        }
+                    }
+                }
+            } else {
+                 std::cerr << "[Services] Error: Sound directory not found or is not a directory: " << soundDir << std::endl;
             }
-            // registerSound already prints errors if it fails
+        } catch (const std::filesystem::filesystem_error& e) {
+            std::cerr << "[Services] Error iterating sound directory: " << e.what() << std::endl;
         }
-        std::cout << "[Services] Registered " << loadedCount << " out of " << soundsToLoad.size() << " sounds." << std::endl;
+        std::cout << "[Services] Registered " << loadedCount << " out of " << attemptedCount << " found .wav files." << std::endl;
+        // --- END MODIFIED ---
     }
     // <<< END: Initialize Sound Service >>>
 

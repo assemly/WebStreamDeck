@@ -3,10 +3,12 @@
 #include "../Utils/StringUtils.hpp" // Added
 #include <iostream> // For error reporting
 #include <string> // Needed for wstring conversion, etc.
-#include <vector> // Needed for wstring conversion buffer & INPUT array
+#include <vector> // Needed for wstring conversion buffer & INPUT array, and melody sequence
 #include <algorithm> // For std::transform
 #include <sstream>   // For splitting string
 #include <map>       // For key mapping
+#include <thread>    // For starting async playback
+#include <chrono>    // For sleep duration
 
 // Platform specific includes for actions
 #ifdef _WIN32
@@ -76,21 +78,58 @@ void ActionExecutionService::executeAction(const std::string& actionType, const 
         std::cout << "Executing: Media Stop (Simulate Key)" << std::endl;
         InputUtils::SimulateMediaKeyPress(VK_MEDIA_STOP);
     }
-    // --- ADDED: Chinese Musical Notes Actions ---
-    else if (actionType == "play_gong") {
-        m_soundService.playSound("gong"); // Use lowercase name
+    // --- REMOVED: Original Chinese Musical Notes Actions ---
+    // --- ADDED: New individual sound actions based on WAV files ---
+    else if (actionType == "play_gong_c3") {
+        m_soundService.playSound("gong_c3");
+    } else if (actionType == "play_gong_c4") {
+        m_soundService.playSound("gong_c4");
+    } else if (actionType == "play_gong_c5") {
+        m_soundService.playSound("gong_c5");
+    } else if (actionType == "play_shang_d3") {
+        m_soundService.playSound("shang_d3");
+    } else if (actionType == "play_shang_d4") {
+        m_soundService.playSound("shang_d4");
+    } else if (actionType == "play_shang_d5") {
+        m_soundService.playSound("shang_d5");
+    } else if (actionType == "play_jiao_e3") {
+        m_soundService.playSound("jiao_e3");
+    } else if (actionType == "play_jiao_e4") {
+        m_soundService.playSound("jiao_e4");
+    } else if (actionType == "play_jiao_e5") {
+        m_soundService.playSound("jiao_e5");
+    } else if (actionType == "play_qingjiao_f3") {
+        m_soundService.playSound("qingjiao_f3");
+    } else if (actionType == "play_qingjiao_f4") {
+        m_soundService.playSound("qingjiao_f4");
+    } else if (actionType == "play_qingjiao_f5") {
+        m_soundService.playSound("qingjiao_f5");
+    } else if (actionType == "play_zheng_g3") { // Assuming zhi is zheng
+        m_soundService.playSound("zheng_g3");
+    } else if (actionType == "play_zheng_g4") {
+        m_soundService.playSound("zheng_g4");
+    } else if (actionType == "play_zheng_g5") {
+        m_soundService.playSound("zheng_g5");
+    } else if (actionType == "play_yu_a3") {
+        m_soundService.playSound("yu_a3");
+    } else if (actionType == "play_yu_a4") {
+        m_soundService.playSound("yu_a4");
+    } else if (actionType == "play_yu_a5") {
+        m_soundService.playSound("yu_a5");
+    } else if (actionType == "play_biangong_b3") {
+        m_soundService.playSound("biangong_b3");
+    } else if (actionType == "play_biangong_b4") {
+        m_soundService.playSound("biangong_b4");
+    } else if (actionType == "play_biangong_b5") {
+        m_soundService.playSound("biangong_b5");
     }
-    else if (actionType == "play_shang") {
-        m_soundService.playSound("shang"); // Use lowercase name
-    }
-    else if (actionType == "play_jiao") {
-        m_soundService.playSound("jiao"); // Use lowercase name
-    }
-    else if (actionType == "play_zhi") {
-        m_soundService.playSound("zhi"); // Use lowercase name
-    }
-    else if (actionType == "play_yu") {
-        m_soundService.playSound("yu"); // Use lowercase name
+    // --- RE-ADDED: Melody Playback Action ---
+    else if (actionType == "play_melody_qinghuaci") {
+        std::cout << "[Exec Service] Starting melody playback in background thread..." << std::endl;
+        // Launch the melody playback in a separate thread and detach it
+        // so it doesn't block the main thread.
+        std::thread melodyThread(&ActionExecutionService::playMelodyQinghuaciAsync, this);
+        melodyThread.detach();
     }
     // --- END of Added Actions ---
     else {
@@ -222,4 +261,53 @@ bool ActionExecutionService::executeHotkey(const std::string& hotkeyString) {
     std::cerr << "Error: hotkey action is currently only supported on Windows." << std::endl;
     return false;
 #endif
+}
+
+// <<< RE-ADDED: Implementation for asynchronous melody playback >>>
+void ActionExecutionService::playMelodyQinghuaciAsync() {
+    std::cout << "[Melody Thread] Playback started." << std::endl;
+    
+    // 青花瓷主歌片段（科学记谱法）
+    const std::vector<std::pair<std::string, int>> melody = {
+          // Phrase 1: 天青色等烟雨 (5 5 3 | 2 3 6_) - Revised with correct low A and timing attempt
+        {"zheng_g4",386}, {"zheng_g4", 386}, {"jiao_e4", 386}, // 5 5 3
+        {"shang_d4", 386}, {"jiao_e4",386}, {"yu_a3", 773},   // 2 3 6_ (Low A, duration guess)
+
+
+        // // 副歌"2 3 5 3 | 2"（而我在等你）
+        {"shang_d4", 386}, {"jiao_e4", 386},{"zheng_g4", 386} ,{"jiao_e4", 386} ,{"shang_d4", 1546},
+
+
+        // //  5 5 3 | 2 3 5_ 炊烟袅袅升起
+        {"zheng_g4",386}, {"zheng_g4", 386}, {"jiao_e4", 386}, // 5 5 3
+        {"shang_d4", 386}, {"jiao_e4",386}, {"zheng_g3",773},   
+
+        // // 2 3 5 2 | 1 隔江千万里
+         {"shang_d4", 386}, {"jiao_e4", 386},{"zheng_g4", 386} ,{"jiao_e4", 386} , {"gong_c4",1546},
+
+          // Phrase 5: 在瓶底书汉隶 仿前朝的飘逸 (0 1 2 3 | 5 6 5 4) - Ignoring 0 rest
+        {"gong_c4", 386}, {"shang_d4", 386}, {"jiao_e4", 386},           // 1 2 3
+        {"zheng_g4", 386}, {"yu_a4", 386}, {"zheng_g4", 386}, {"qingjiao_f4", 386}, // 5 6 5 4 (using f4 for 4)
+        {"zheng_g4", 386}, {"jiao_e4", 386}, {"jiao_e4", 386}, {"shang_d4", 386}, {"shang_d4", 1546}, // 5 3 3 2 | 2
+       // 就当我 0 1 2 1
+        {"gong_c4", 386}, {"shang_d4", 386}, {"gong_c4", 386},
+        // 为遇见// 1 2 1 2
+        {"gong_c4", 386}, {"shang_d4", 386},{"gong_c4", 386}, {"shang_d4", 386},
+        //  2 3 5 3 3
+         {"shang_d4", 386}, {"jiao_e4", 773},{"zheng_g4",386}, {"jiao_e4",386},{"jiao_e4",1158}
+
+
+    };
+
+    // 动态速度控制（模拟原曲的rubato节奏）
+    int baseTempo = 250; 
+    for (const auto& notePause : melody) {
+        const std::string& note = notePause.first;
+        int dynamicDuration = notePause.second * (rand() % 20 + 90) / 100; // ±10%随机波动
+        const std::chrono::milliseconds pauseDuration(dynamicDuration);
+        
+        m_soundService.playSound(note);
+        std::this_thread::sleep_for(pauseDuration);
+    }
+    std::cout << "[Melody Thread] Playback finished." << std::endl;
 } 

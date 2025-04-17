@@ -142,8 +142,8 @@ void ButtonEditComponent::SubmitForm() {
         std::cerr << "[ButtonEditComponent] Error: Invalid action type index during submit." << std::endl;
     }
     buttonData.action_param = m_newButtonActionParam;
-    if (buttonData.action_type.rfind("media_", 0) == 0) { // Clear param for media actions
-        buttonData.action_param = "";
+    if (buttonData.action_type.rfind("media_", 0) == 0 || buttonData.action_type.rfind("play_", 0) == 0) {
+        buttonData.action_param = ""; 
     }
     buttonData.icon_path = m_newButtonIconPath;
 

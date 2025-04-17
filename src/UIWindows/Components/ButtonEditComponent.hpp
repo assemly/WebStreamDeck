@@ -43,9 +43,19 @@ private:
     // Supported action types (needs to be accessible here)
     // Consider moving this to a shared constant or passing from parent if needed elsewhere
     const std::vector<std::string> m_supportedActionTypes = {
-        "launch_app", "open_url", "hotkey", "media_volume_up", "media_volume_down",
-        "media_mute", "media_play_pause", "media_next_track", "media_prev_track", "media_stop",
-        "play_gong", "play_shang", "play_jiao", "play_zhi", "play_yu"
+        "launch_app", "open_url", "hotkey", 
+        "media_volume_up", "media_volume_down", "media_mute", 
+        "media_play_pause", "media_next_track", "media_prev_track", "media_stop",
+        // New sound actions based on filenames:
+        "play_gong_c3", "play_gong_c4", "play_gong_c5",
+        "play_shang_d3", "play_shang_d4", "play_shang_d5",
+        "play_jiao_e3", "play_jiao_e4", "play_jiao_e5",
+        "play_qingjiao_f3", "play_qingjiao_f4", "play_qingjiao_f5",
+        "play_zheng_g3", "play_zheng_g4", "play_zheng_g5", // Assuming zhi = zheng
+        "play_yu_a3", "play_yu_a4", "play_yu_a5",
+        "play_biangong_b3", "play_biangong_b4", "play_biangong_b5",
+        "play_melody_qinghuaci"
+        // REMOVED: "play_gong", "play_shang", "play_jiao", "play_zhi", "play_yu", "play_melody_gaoshan"
     };
 
     // Private helpers

@@ -24,4 +24,7 @@ private:
     bool executeOpenUrl(const std::string& url);
     bool executeHotkey(const std::string& keys);
     // ... potentially other helpers ...
+
+    // <<< RE-ADDED: Private method for asynchronous melody playback >>>
+    void playMelodyQinghuaciAsync();
 }; 

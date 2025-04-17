@@ -1,40 +1,26 @@
 {
-    "buttons": [       
-        {
-            "action_param": "",
-            "action_type": "play_gong",
-            "icon_path": "assets/icons/gong.png",
-            "id": "btn_gong",
-            "name": "宫"
-        },
-        {
-            "action_param": "",
-            "action_type": "play_shang",
-            "icon_path": "",
-            "id": "btn_shang",
-            "name": "商"
-        },
-        {
-            "action_param": "",
-            "action_type": "play_jiao",
-            "icon_path": "",
-            "id": "btn_jiao",
-            "name": "角"
-        },
-        {
-            "action_param": "",
-            "action_type": "play_zhi",
-            "icon_path": "",
-            "id": "btn_zhi",
-            "name": "徵"
-        },
-        {
-            "action_param": "",
-            "action_type": "play_yu",
-            "icon_path": "",
-            "id": "btn_yu",
-            "name": "羽"
-        }
+    "buttons": [
+        { "action_param": "", "action_type": "play_gong_c3", "icon_path": "", "id": "btn_play_gong_c3", "name": "宫(C3) 1" },
+        { "action_param": "", "action_type": "play_shang_d3", "icon_path": "", "id": "btn_play_shang_d3", "name": "商(D3) 2" },
+        { "action_param": "", "action_type": "play_jiao_e3", "icon_path": "", "id": "btn_play_jiao_e3", "name": "角(E3) 3" },
+        { "action_param": "", "action_type": "play_qingjiao_f3", "icon_path": "", "id": "btn_play_qingjiao_f3", "name": "清(F3) 4" },
+        { "action_param": "", "action_type": "play_zheng_g3", "icon_path": "", "id": "btn_play_zheng_g3", "name": "徵(G3) 5" },
+        { "action_param": "", "action_type": "play_yu_a3", "icon_path": "", "id": "btn_play_yu_a3", "name": "羽(A3) 6" },
+        { "action_param": "", "action_type": "play_biangong_b3", "icon_path": "", "id": "btn_play_biangong_b3", "name": "变(B3) 7" },
+        { "action_param": "", "action_type": "play_gong_c4", "icon_path": "", "id": "btn_play_gong_c4", "name": "宫(C4) 1" },
+        { "action_param": "", "action_type": "play_shang_d4", "icon_path": "", "id": "btn_play_shang_d4", "name": "商(D4) 2" },
+        { "action_param": "", "action_type": "play_jiao_e4", "icon_path": "", "id": "btn_play_jiao_e4", "name": "角(E4) 3" },
+        { "action_param": "", "action_type": "play_qingjiao_f4", "icon_path": "", "id": "btn_play_qingjiao_f4", "name": "清(F4) 4" },
+        { "action_param": "", "action_type": "play_zheng_g4", "icon_path": "", "id": "btn_play_zheng_g4", "name": "徵(G4) 5" },
+        { "action_param": "", "action_type": "play_yu_a4", "icon_path": "", "id": "btn_play_yu_a4", "name": "羽(A4) 6" },
+        { "action_param": "", "action_type": "play_biangong_b4", "icon_path": "", "id": "btn_play_biangong_b4", "name": "变(B4) 7" },
+        { "action_param": "", "action_type": "play_gong_c5", "icon_path": "", "id": "btn_play_gong_c5", "name": "宫(C5) 1" },
+        { "action_param": "", "action_type": "play_shang_d5", "icon_path": "", "id": "btn_play_shang_d5", "name": "商(D5) 2" },
+        { "action_param": "", "action_type": "play_jiao_e5", "icon_path": "", "id": "btn_play_jiao_e5", "name": "角(E5) 3" },
+        { "action_param": "", "action_type": "play_qingjiao_f5", "icon_path": "", "id": "btn_play_qingjiao_f5", "name": "清(F5) 4" },
+        { "action_param": "", "action_type": "play_zheng_g5", "icon_path": "", "id": "btn_play_zheng_g5", "name": "徵(G5) 5" },
+        { "action_param": "", "action_type": "play_yu_a5", "icon_path": "", "id": "btn_play_yu_a5", "name": "羽(A5) 6" },
+        { "action_param": "", "action_type": "play_biangong_b5", "icon_path": "", "id": "btn_play_biangong_b5", "name": "变(B5) 7" }
     ],
     "layout": {
         "cols_per_page": 7,
@@ -44,31 +30,31 @@
                 0,
                 [
                     [
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        ""
+                        "btn_play_gong_c3",
+                        "btn_play_shang_d3",
+                        "btn_play_jiao_e3",
+                        "btn_play_qingjiao_f3",
+                        "btn_play_zheng_g3",
+                        "btn_play_yu_a3",
+                        "btn_play_biangong_b3"
                     ],
                     [
-                        "",
-                        "btn_gong",
-                        "btn_shang",
-                        "btn_jiao",
-                        "btn_zhi",
-                        "btn_yu",
-                        ""
+                        "btn_play_gong_c4",
+                        "btn_play_shang_d4",
+                        "btn_play_jiao_e4",
+                        "btn_play_qingjiao_f4",
+                        "btn_play_zheng_g4",
+                        "btn_play_yu_a4",
+                        "btn_play_biangong_b4"
                     ],
                     [
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        ""
+                        "btn_play_gong_c5",
+                        "btn_play_shang_d5",
+                        "btn_play_jiao_e5",
+                        "btn_play_qingjiao_f5",
+                        "btn_play_zheng_g5",
+                        "btn_play_yu_a5",
+                        "btn_play_biangong_b5"
                     ]
                 ]
             ]
